@@ -50,6 +50,29 @@ LM Studio / [ds4](#works-with-any-openai-compatible-server) — anything that se
   grading needs one API key; the dashboard charts load Chart.js from a CDN — if offline, the
   charts are skipped and the rest of the UI still works.)
 
+## Why benchy
+
+A **local, single-file companion** to your inference server, built for the tight
+**quantize → measure → compare** loop. What it's good at:
+
+- **Zero-friction & self-contained** — one `dashboard.py`, Python standard library only, no
+  `pip install`, no config to write. Clone and run next to whatever server you already have.
+- **Live, not batch** — a real-time per-question feed, running accuracy, and live host/server
+  metrics (decode t/s, model RSS, memory) *while the eval runs*: you watch the model work,
+  not just read a final number.
+- **Statistically honest by default** — greedy/seeded determinism, Wilson 95% CIs,
+  option-order randomization, letter-bias χ², an unparseable-rate, and a **paired McNemar A/B
+  test** that tells you whether two builds (e.g. two quantizations) *really* differ on the
+  same questions — not just whether two error bars happen to overlap.
+- **Any OpenAI-compatible server** — llama.cpp, vLLM, Ollama, LM Studio, ds4; nothing is
+  patched or engine-specific for scoring.
+- **Broad + a ready medical panel** — general reasoning & code (MMLU-Pro, SuperGPQA,
+  HumanEval/MBPP) plus a medical set ready out of the box (MedQA, MedMCQA, MedXpertQA,
+  HealthBench) — and **bring-your-own** JSONL drops straight in.
+- **Reproducible & safe** — every run stamps the model/quant, git SHA, dataset hash and host;
+  the control plane is localhost-only with a CSRF guard, and code-execution benchmarks are
+  off by default.
+
 ## How it works
 
 ```
