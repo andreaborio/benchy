@@ -1,0 +1,124 @@
+{
+  "_api_version": 1,
+  "benchmarks": {
+    "arc_challenge": {
+      "content_sha": null,
+      "dataset": "allenai/ai2_arc",
+      "locked_at": "2026-06-09T23:19:51",
+      "rows": null,
+      "upstream_sha": "210d026faf9955653af8916fad021475a3f00453"
+    },
+    "commonsense_qa": {
+      "content_sha": null,
+      "dataset": "tau/commonsense_qa",
+      "locked_at": "2026-06-09T23:19:52",
+      "rows": null,
+      "upstream_sha": "94630fe30dad47192a8546eb75f094926d47e155"
+    },
+    "hellaswag": {
+      "content_sha": null,
+      "dataset": "Rowan/hellaswag",
+      "locked_at": "2026-06-09T23:19:52",
+      "rows": null,
+      "upstream_sha": "218ec52e09a7e7462a5400043bb9a69a41d06b76"
+    },
+    "humaneval": {
+      "content_sha": "3c1ef3a5c5195f1da48c20d5e4f804d115a06475c55a000bff2a0a36e1b2fc87",
+      "dataset": "openai/openai_humaneval",
+      "locked_at": "2026-06-09T23:21:38",
+      "rows": 164,
+      "upstream_sha": "7dce6050a7d6d172f3cc5c32aa97f52fa1a2e544"
+    },
+    "logic": {
+      "content_sha": "7cb2b874b40b3781f740b005ae87986ef3524dba255b5cd247e44ab947d5af7d",
+      "dataset": "cais/mmlu",
+      "locked_at": "2026-06-09T23:21:38",
+      "rows": 126,
+      "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
+    },
+    "mbpp": {
+      "content_sha": "a850e463e72a2ee8b7a2f483c702d7b85ca023a662287beb4c47fb2a5abcec3c",
+      "dataset": "google-research-datasets/mbpp",
+      "locked_at": "2026-06-09T23:21:40",
+      "rows": 257,
+      "upstream_sha": "4bb6404fdc6cacfda99d4ac4205087b89d32030c"
+    },
+    "medmcqa": {
+      "content_sha": null,
+      "dataset": "openlifescienceai/medmcqa",
+      "locked_at": "2026-06-09T23:19:51",
+      "rows": null,
+      "upstream_sha": "91c6572c454088bf71b679ad90aa8dffcd0d5868"
+    },
+    "medqa_test": {
+      "content_sha": null,
+      "dataset": "GBaker/MedQA-USMLE-4-options",
+      "locked_at": "2026-06-09T23:19:51",
+      "rows": null,
+      "upstream_sha": "0fb93dd23a7339b6dcd27e241cb9b5eca62d4d18"
+    },
+    "medxpertqa": {
+      "content_sha": null,
+      "dataset": "TsinghuaC3I/MedXpertQA",
+      "locked_at": "2026-06-09T23:19:51",
+      "rows": null,
+      "upstream_sha": "7e7c465a68eb2b866926bfa59c8c9d17a8daba65"
+    },
+    "mmlu_cs": {
+      "content_sha": "a80b30c568fd922fc02e83f08dbeabbcd36329719cf0be3825478b222d969565",
+      "dataset": "cais/mmlu",
+      "locked_at": "2026-06-09T23:21:40",
+      "rows": 312,
+      "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
+    },
+    "mmlu_medical": {
+      "content_sha": null,
+      "dataset": "cais/mmlu",
+      "locked_at": "2026-06-09T23:19:53",
+      "rows": null,
+      "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
+    },
+    "mmlu_pro": {
+      "content_sha": null,
+      "dataset": "TIGER-Lab/MMLU-Pro",
+      "locked_at": "2026-06-09T23:19:50",
+      "rows": null,
+      "upstream_sha": "b189ec765aa7ed75c8acfea42df31fdae71f97be"
+    },
+    "openbookqa": {
+      "content_sha": null,
+      "dataset": "allenai/openbookqa",
+      "locked_at": "2026-06-09T23:19:52",
+      "rows": null,
+      "upstream_sha": "388097ea7776314e93a529163e0fea805b8a6454"
+    },
+    "pubmedqa": {
+      "content_sha": null,
+      "dataset": "qiaojin/PubMedQA",
+      "locked_at": "2026-06-09T23:19:52",
+      "rows": null,
+      "upstream_sha": "9001f2853fb87cab8d220904e0de81ac6973b318"
+    },
+    "supergpqa": {
+      "content_sha": null,
+      "dataset": "m-a-p/SuperGPQA",
+      "locked_at": "2026-06-09T23:19:50",
+      "rows": null,
+      "upstream_sha": "4430d4458112c7d4497fdcf94d7cc223313d6acf"
+    },
+    "truthfulqa": {
+      "content_sha": null,
+      "dataset": "truthfulqa/truthful_qa",
+      "locked_at": "2026-06-09T23:19:50",
+      "rows": null,
+      "upstream_sha": "741b8276f2d1982aa3d5b832d3ee81ed3b896490"
+    },
+    "winogrande": {
+      "content_sha": null,
+      "dataset": "allenai/winogrande",
+      "locked_at": "2026-06-09T23:19:52",
+      "rows": null,
+      "upstream_sha": "01e74176c63542e6b0bcb004dcdea22d94fb67b5"
+    }
+  }
+}

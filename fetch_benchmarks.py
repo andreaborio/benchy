@@ -23,12 +23,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 LETTERS = "ABCDEFGHIJ"
 
-def api_rows(dataset, config, split, cap):
-    """Page rows out of the datasets-server API (100 at a time) up to `cap`."""
+def api_rows(dataset, config, split, cap, revision=None):
+    """Page rows out of the datasets-server API (100 at a time) up to `cap`.
+
+    `revision` (a dataset commit sha or branch) is passed through for best-effort
+    pinning; the datasets-server accepts it without erroring on unknown values, so
+    integrity is additionally enforced by content hashing in api.py."""
     out, off = [], 0
     while off < cap:
-        url = "https://datasets-server.huggingface.co/rows?" + urllib.parse.urlencode(
-            {"dataset": dataset, "config": config, "split": split, "offset": off, "length": 100})
+        q = {"dataset": dataset, "config": config, "split": split, "offset": off, "length": 100}
+        if revision: q["revision"] = revision
+        url = "https://datasets-server.huggingface.co/rows?" + urllib.parse.urlencode(q)
         try:
             with urllib.request.urlopen(url, timeout=40) as r:
                 d = json.load(r)
@@ -203,10 +208,14 @@ MANUAL = {
     "healthbench_hard": "HealthBench — open-ended, rubric-graded by an external judge; fetched & run by healthbench.py.",
 }
 
-def fetch(key):
+def dataset_of(key):
+    """The single upstream HF dataset id a benchmark key draws from (parts share it)."""
+    return REGISTRY[key]["parts"][0][0]
+
+def fetch(key, revision=None):
     spec = REGISTRY[key]; recs = []
     for dataset, config, split in spec["parts"]:
-        part = api_rows(dataset, config, split, spec["cap"])
+        part = api_rows(dataset, config, split, spec["cap"], revision=revision)
         kept = [rec for rec in (spec["norm"](r) for r in part) if rec]
         if len(spec["parts"]) > 1: print(f"    {config}: +{len(kept)}/{len(part)}")
         recs += kept

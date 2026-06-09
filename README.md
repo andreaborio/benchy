@@ -126,6 +126,38 @@ The dashboard can also fetch benchmarks, start/stop the server, and launch runs 
 browser. **Config:** set `BENCHY_SERVER` (default `http://127.0.0.1:8000`) and
 `BENCHY_MODEL` (default: auto-detected from `/v1/models`) if your setup differs.
 
+## Reproducible snapshots — `api.py` + the lockfile
+
+Other tools build on benchy as their benchmark source (e.g.
+[forgequant](https://github.com/andreaborio/forgequant) calibrates quantization
+imatrices on these sets). For that, benchmark data must be **pinned and verifiable**, and
+benchy must expose a **stable contract** that won't break when internals change.
+
+`api.py` is that contract. Consumers import only `api`, never `fetch_benchmarks` internals;
+`api.API_VERSION` bumps on a breaking change.
+
+```sh
+python3 api.py status                 # lock state + upstream-drift for every set
+python3 api.py prelock                 # pin upstream revisions (Hub refs only — no download)
+python3 api.py lock <key|all>          # fetch + lock (revision + content SHA-256 + row count)
+python3 api.py relock <key>            # accept upstream changes: re-pin + re-hash
+python3 api.py verify <key|all>        # re-fetch the pinned revision, check the content hash
+```
+
+`benchmarks.lock.json` (tracked) records, per benchmark: the upstream HF dataset commit,
+the content SHA-256 of the normalized rows, and the row count. `api.fetch(key)` fetches the
+**pinned** revision and verifies the hash — so a result (or a calibration corpus) is always
+tied to an exact snapshot, and any upstream drift is **detected, not silently absorbed**.
+Benchmark rows themselves are never committed (`data/` is gitignored — see licenses in
+`DATA.md`); only the lock travels with the repo, so everyone fetches the same thing.
+
+```python
+import api
+path = api.fetch("humaneval")          # pinned + verified; fetches on demand
+api.registry()                          # [{key,name,domain,tier,fit,license,present,locked}]
+api.lock_status()                       # per-set drift vs upstream
+```
+
 ## Benchmarks
 
 Fetchable via `fetch_benchmarks.py` / the dashboard (MCQ sets normalised to
