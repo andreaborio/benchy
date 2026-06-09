@@ -183,6 +183,37 @@ recommended set with `python3 fetch_benchmarks.py current` or the dashboard's **
 **Legacy / saturated** (fetchable, off by default): ARC-Challenge, HellaSwag, CommonsenseQA,
 OpenBookQA, WinoGrande, MMLU-CS, PubMedQA, MMLU-medical.
 
+### Adding a benchmark — a data PR, no code
+
+The registry is **declarative**: every benchmark is a JSON file in `benchmarks/`, loaded
+by `registry.py`. To add one, drop a file — no Python — describing where the rows come
+from and how to map one row to `{question, options{A..}, answer_idx}`:
+
+```jsonc
+// benchmarks/my_bench.json
+{
+  "name": "My Benchmark", "domain": "reasoning", "tier": "current",
+  "license": "… (verify)", "desc": "one line shown in the UI", "cap": 800,
+  "source": [{"dataset": "org/dataset", "config": "default", "split": "test"}],
+  "map": {
+    "question": "question",                       // or {key, context, template}
+    "options":  {"from": "list", "key": "choices"},
+    "answer":   {"from": "index", "key": "answer"}
+  }
+}
+```
+
+`options.from`: `list` · `dict` · `labeled` · `keys` · `pair` · `fixed`.
+`answer.from`: `index` · `letter` · `answerKey` · `map` · `match`. Dotted keys
+(`mc1_targets.choices`) index nested fields. Only odd shapes (code execution, context
+joins) need a Python `hook` instead of a `map`. The push CI validates new entries against
+the live source. See the existing files in `benchmarks/` as templates.
+
+**Health check.** `python3 healthcheck.py` probes one row of every benchmark and runs its
+normalizer, so a renamed/changed upstream dataset is caught before it breaks a run; it also
+flags lock drift. It runs in CI weekly and on every registry edit
+(`.github/workflows/benchmarks-healthcheck.yml`).
+
 **Manual / gated:** **GPQA** Diamond (the frontier science discriminator — gated, needs a HF
 token), **HLE** (gated, mostly free-form/multimodal), and **HealthBench** (rubric-graded, run
 by `healthbench.py`). Relevant but **out of scope** for this harness (would need new runners):

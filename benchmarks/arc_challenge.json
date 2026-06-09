@@ -1,0 +1,26 @@
+{
+  "name": "ARC-Challenge",
+  "domain": "reasoning",
+  "tier": "legacy",
+  "license": "CC-BY-SA-4.0 (verify)",
+  "desc": "Grade-school science questions filtered to defeat retrieval/word-association shortcuts.",
+  "cap": 1172,
+  "source": [
+    {
+      "dataset": "allenai/ai2_arc",
+      "config": "ARC-Challenge",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "labeled",
+      "key": "choices"
+    },
+    "answer": {
+      "from": "answerKey",
+      "key": "answerKey"
+    }
+  }
+}

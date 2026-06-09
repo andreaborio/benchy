@@ -1,0 +1,51 @@
+{
+  "name": "MMLU \u2014 medical cluster",
+  "domain": "medical",
+  "tier": "legacy",
+  "license": "MIT",
+  "desc": "MMLU clinical/biomedical subsets (anatomy, clinical knowledge, medicine, genetics\u2026).",
+  "cap": 300,
+  "source": [
+    {
+      "dataset": "cais/mmlu",
+      "config": "anatomy",
+      "split": "test"
+    },
+    {
+      "dataset": "cais/mmlu",
+      "config": "clinical_knowledge",
+      "split": "test"
+    },
+    {
+      "dataset": "cais/mmlu",
+      "config": "college_biology",
+      "split": "test"
+    },
+    {
+      "dataset": "cais/mmlu",
+      "config": "college_medicine",
+      "split": "test"
+    },
+    {
+      "dataset": "cais/mmlu",
+      "config": "medical_genetics",
+      "split": "test"
+    },
+    {
+      "dataset": "cais/mmlu",
+      "config": "professional_medicine",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "list",
+      "key": "choices"
+    },
+    "answer": {
+      "from": "index",
+      "key": "answer"
+    }
+  }
+}

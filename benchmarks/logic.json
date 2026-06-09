@@ -1,0 +1,26 @@
+{
+  "name": "MMLU \u2014 formal logic",
+  "domain": "reasoning",
+  "tier": "current",
+  "license": "MIT",
+  "desc": "MMLU formal-logic subset \u2014 symbolic/logical reasoning.",
+  "cap": 200,
+  "source": [
+    {
+      "dataset": "cais/mmlu",
+      "config": "formal_logic",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "list",
+      "key": "choices"
+    },
+    "answer": {
+      "from": "index",
+      "key": "answer"
+    }
+  }
+}

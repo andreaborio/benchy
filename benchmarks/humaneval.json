@@ -1,0 +1,17 @@
+{
+  "name": "HumanEval",
+  "domain": "code",
+  "tier": "current",
+  "license": "MIT (verify)",
+  "fit": "code",
+  "desc": "Write Python functions from a docstring; scored by EXECUTING unit tests (pass@1).",
+  "cap": 164,
+  "source": [
+    {
+      "dataset": "openai/openai_humaneval",
+      "config": "openai_humaneval",
+      "split": "test"
+    }
+  ],
+  "hook": "humaneval"
+}

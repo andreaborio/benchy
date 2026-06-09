@@ -1,0 +1,26 @@
+{
+  "name": "SuperGPQA",
+  "domain": "reasoning",
+  "tier": "current",
+  "license": "ODC-BY (verify)",
+  "desc": "26.5k graduate-level questions across 285 disciplines \u2014 broad, hard, well below ceiling.",
+  "cap": 1500,
+  "source": [
+    {
+      "dataset": "m-a-p/SuperGPQA",
+      "config": "default",
+      "split": "train"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "list",
+      "key": "options"
+    },
+    "answer": {
+      "from": "letter",
+      "key": "answer_letter"
+    }
+  }
+}

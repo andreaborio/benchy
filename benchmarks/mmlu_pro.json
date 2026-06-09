@@ -1,0 +1,26 @@
+{
+  "name": "MMLU-Pro",
+  "domain": "reasoning",
+  "tier": "current",
+  "license": "MIT (verify)",
+  "desc": "Harder 10-option MMLU across 14 subjects \u2014 reasoning-heavy, far less saturated than MMLU.",
+  "cap": 1000,
+  "source": [
+    {
+      "dataset": "TIGER-Lab/MMLU-Pro",
+      "config": "default",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "list",
+      "key": "options"
+    },
+    "answer": {
+      "from": "index",
+      "key": "answer_index"
+    }
+  }
+}

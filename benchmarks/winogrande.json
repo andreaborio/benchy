@@ -1,0 +1,36 @@
+{
+  "name": "WinoGrande",
+  "domain": "commonsense",
+  "tier": "legacy",
+  "license": "CC-BY (verify)",
+  "desc": "Winograd-schema pronoun/coreference resolution at scale \u2014 fill the blank with the right noun.",
+  "cap": 1000,
+  "source": [
+    {
+      "dataset": "allenai/winogrande",
+      "config": "winogrande_xl",
+      "split": "validation"
+    }
+  ],
+  "map": {
+    "question": {
+      "key": "sentence",
+      "template": "Fill the blank ( _ ):\n{question}"
+    },
+    "options": {
+      "from": "pair",
+      "keys": [
+        "option1",
+        "option2"
+      ]
+    },
+    "answer": {
+      "from": "map",
+      "key": "answer",
+      "map": {
+        "1": "A",
+        "2": "B"
+      }
+    }
+  }
+}

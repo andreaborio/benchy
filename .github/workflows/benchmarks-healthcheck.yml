@@ -1,0 +1,32 @@
+name: benchmarks-healthcheck
+
+# Proactively catch a renamed/changed/removed upstream dataset before it breaks a real
+# run. Probes one row of every benchmark through the datasets-server and runs its
+# normalizer; fails (and surfaces in the Actions tab) if any source is broken.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"          # every Monday 06:17 UTC
+  workflow_dispatch: {}            # and on-demand from the Actions tab
+  push:
+    paths:
+      - "benchmarks/**"            # validate registry edits (a new benchmark PR)
+      - "registry.py"
+      - "fetch_benchmarks.py"
+      - "healthcheck.py"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Probe every benchmark (1 row each)
+        run: python3 healthcheck.py
+      - name: Unit tests (registry resolver + api lock, offline)
+        if: always()
+        run: |
+          python3 test_registry.py
+          python3 test_api.py

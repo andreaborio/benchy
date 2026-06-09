@@ -1,0 +1,31 @@
+{
+  "name": "MedMCQA",
+  "domain": "medical",
+  "tier": "current",
+  "license": "MIT (verify)",
+  "desc": "Indian medical-entrance exam (AIIMS/NEET-PG) multiple-choice questions.",
+  "cap": 800,
+  "source": [
+    {
+      "dataset": "openlifescienceai/medmcqa",
+      "config": "default",
+      "split": "validation"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "keys",
+      "keys": [
+        "opa",
+        "opb",
+        "opc",
+        "opd"
+      ]
+    },
+    "answer": {
+      "from": "index",
+      "key": "cop"
+    }
+  }
+}

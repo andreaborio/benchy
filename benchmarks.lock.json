@@ -32,7 +32,7 @@
     "logic": {
       "content_sha": "7cb2b874b40b3781f740b005ae87986ef3524dba255b5cd247e44ab947d5af7d",
       "dataset": "cais/mmlu",
-      "locked_at": "2026-06-09T23:21:38",
+      "locked_at": "2026-06-09T23:41:28",
       "rows": 126,
       "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
     },
@@ -67,7 +67,7 @@
     "mmlu_cs": {
       "content_sha": "a80b30c568fd922fc02e83f08dbeabbcd36329719cf0be3825478b222d969565",
       "dataset": "cais/mmlu",
-      "locked_at": "2026-06-09T23:21:40",
+      "locked_at": "2026-06-09T23:41:29",
       "rows": 312,
       "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
     },

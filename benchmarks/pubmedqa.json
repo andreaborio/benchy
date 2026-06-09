@@ -1,0 +1,16 @@
+{
+  "name": "PubMedQA",
+  "domain": "medical",
+  "tier": "legacy",
+  "license": "MIT (verify)",
+  "desc": "Biomedical yes/no/maybe research questions answered from a PubMed abstract.",
+  "cap": 1000,
+  "source": [
+    {
+      "dataset": "qiaojin/PubMedQA",
+      "config": "pqa_labeled",
+      "split": "train"
+    }
+  ],
+  "hook": "pubmedqa"
+}

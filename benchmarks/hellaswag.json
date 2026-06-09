@@ -1,0 +1,32 @@
+{
+  "name": "HellaSwag",
+  "domain": "commonsense",
+  "tier": "legacy",
+  "license": "MIT (verify)",
+  "desc": "Commonsense sentence completion: pick the plausible continuation of a described scene.",
+  "cap": 1000,
+  "source": [
+    {
+      "dataset": "Rowan/hellaswag",
+      "config": "default",
+      "split": "validation"
+    }
+  ],
+  "map": {
+    "question": {
+      "context": [
+        "ctx",
+        "ctx_a"
+      ],
+      "template": "Choose the most plausible continuation:\n{context}"
+    },
+    "options": {
+      "from": "list",
+      "key": "endings"
+    },
+    "answer": {
+      "from": "index",
+      "key": "label"
+    }
+  }
+}

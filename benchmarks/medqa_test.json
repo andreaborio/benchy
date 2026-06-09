@@ -1,0 +1,26 @@
+{
+  "name": "MedQA (USMLE)",
+  "domain": "medical",
+  "tier": "current",
+  "license": "research use (verify)",
+  "desc": "USMLE-style US medical-licensing exam questions (4-option, GBaker/MedQA-USMLE-4-options).",
+  "cap": 1273,
+  "source": [
+    {
+      "dataset": "GBaker/MedQA-USMLE-4-options",
+      "config": "default",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "dict",
+      "key": "options"
+    },
+    "answer": {
+      "from": "letter",
+      "key": "answer_idx"
+    }
+  }
+}

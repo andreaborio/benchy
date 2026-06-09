@@ -1,0 +1,26 @@
+{
+  "name": "CommonsenseQA",
+  "domain": "commonsense",
+  "tier": "legacy",
+  "license": "MIT (verify)",
+  "desc": "Commonsense reasoning MCQ built from ConceptNet relations (5 options).",
+  "cap": 1221,
+  "source": [
+    {
+      "dataset": "tau/commonsense_qa",
+      "config": "default",
+      "split": "validation"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "labeled",
+      "key": "choices"
+    },
+    "answer": {
+      "from": "answerKey",
+      "key": "answerKey"
+    }
+  }
+}

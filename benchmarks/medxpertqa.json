@@ -1,0 +1,26 @@
+{
+  "name": "MedXpertQA (Text)",
+  "domain": "medical",
+  "tier": "current",
+  "license": "see source (verify; may be non-commercial)",
+  "desc": "Expert-level medical reasoning MCQ (up to 10 options) \u2014 the unsaturated medical set.",
+  "cap": 1000,
+  "source": [
+    {
+      "dataset": "TsinghuaC3I/MedXpertQA",
+      "config": "Text",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "dict",
+      "key": "options"
+    },
+    "answer": {
+      "from": "letter",
+      "key": "label"
+    }
+  }
+}

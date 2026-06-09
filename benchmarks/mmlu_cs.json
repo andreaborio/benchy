@@ -1,0 +1,36 @@
+{
+  "name": "MMLU \u2014 CS cluster",
+  "domain": "knowledge",
+  "tier": "legacy",
+  "license": "MIT",
+  "desc": "MMLU computer-science & machine-learning subsets \u2014 CS knowledge in MCQ form.",
+  "cap": 400,
+  "source": [
+    {
+      "dataset": "cais/mmlu",
+      "config": "college_computer_science",
+      "split": "test"
+    },
+    {
+      "dataset": "cais/mmlu",
+      "config": "high_school_computer_science",
+      "split": "test"
+    },
+    {
+      "dataset": "cais/mmlu",
+      "config": "machine_learning",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "list",
+      "key": "choices"
+    },
+    "answer": {
+      "from": "index",
+      "key": "answer"
+    }
+  }
+}

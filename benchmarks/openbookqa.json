@@ -1,0 +1,26 @@
+{
+  "name": "OpenBookQA",
+  "domain": "knowledge",
+  "tier": "legacy",
+  "license": "Apache-2.0 (verify)",
+  "desc": "Elementary-science Q&A needing a known science fact plus a step of reasoning.",
+  "cap": 500,
+  "source": [
+    {
+      "dataset": "allenai/openbookqa",
+      "config": "main",
+      "split": "test"
+    }
+  ],
+  "map": {
+    "question": "question_stem",
+    "options": {
+      "from": "labeled",
+      "key": "choices"
+    },
+    "answer": {
+      "from": "answerKey",
+      "key": "answerKey"
+    }
+  }
+}

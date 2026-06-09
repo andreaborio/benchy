@@ -1,0 +1,17 @@
+{
+  "name": "MBPP (sanitized)",
+  "domain": "code",
+  "tier": "current",
+  "license": "CC-BY-4.0 (verify)",
+  "fit": "code",
+  "desc": "Short Python programming problems; scored by EXECUTING the provided assertions (pass@1).",
+  "cap": 257,
+  "source": [
+    {
+      "dataset": "google-research-datasets/mbpp",
+      "config": "sanitized",
+      "split": "test"
+    }
+  ],
+  "hook": "mbpp"
+}

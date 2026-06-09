@@ -1,0 +1,27 @@
+{
+  "name": "TruthfulQA (MC1)",
+  "domain": "truthfulness",
+  "tier": "current",
+  "license": "Apache-2.0 (verify)",
+  "desc": "Do answers avoid imitating common human misconceptions/falsehoods (MC1 single-true).",
+  "cap": 817,
+  "source": [
+    {
+      "dataset": "truthfulqa/truthful_qa",
+      "config": "multiple_choice",
+      "split": "validation"
+    }
+  ],
+  "map": {
+    "question": "question",
+    "options": {
+      "from": "list",
+      "key": "mc1_targets.choices"
+    },
+    "answer": {
+      "from": "match",
+      "key": "mc1_targets.labels",
+      "value": 1
+    }
+  }
+}
