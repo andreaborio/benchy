@@ -14,6 +14,7 @@ Writes results/{runs,live,stream}.jsonl + details/ — same format as eval_mcq.p
 Stdlib only. Greedy, deterministic.
 """
 import json, sys, re, random, urllib.request, time, datetime, os, tempfile, subprocess
+import benchy_common as bc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESULTS = os.path.join(HERE, "results")
@@ -25,18 +26,13 @@ SERVER_BASE = os.environ.get("BENCHY_SERVER", "http://127.0.0.1:8000").rstrip("/
 SERVER = SERVER_BASE + "/v1/chat/completions"
 TIMEOUT = float(os.environ.get("BENCHY_CODE_TIMEOUT", "12"))
 SEED = 1234
+# Code-execution is OFF unless the operator explicitly opts in: this runner executes
+# model-written AND benchmark-supplied Python on the host with no real isolation (subprocess
+# + tempdir + timeout only). Require BENCHY_ALLOW_CODE_EXEC so it can never run by surprise
+# (e.g. via a cross-site request to the dashboard's /api/run).
+ALLOW = os.environ.get("BENCHY_ALLOW_CODE_EXEC", "").lower() in ("1", "true", "yes", "on")
 
-def resolve_model():
-    if os.environ.get("BENCHY_MODEL"): return os.environ["BENCHY_MODEL"]
-    try:
-        with urllib.request.urlopen(SERVER_BASE + "/v1/models", timeout=5) as r:
-            ids = [m.get("id") for m in (json.load(r).get("data") or []) if m.get("id")]
-        if ids: return ids[0]
-    except Exception:
-        pass
-    return "default"
-
-MODEL = resolve_model()
+MODEL = bc.resolve_model(SERVER_BASE)
 
 def load(path, n):
     rows = [json.loads(l) for l in open(path) if l.strip()]
@@ -99,6 +95,11 @@ def write_live(d):
     tmp = LIVE + ".tmp"; open(tmp, "w").write(json.dumps(d)); os.replace(tmp, LIVE)
 
 def main():
+    if not ALLOW:
+        sys.exit("⛔ code-execution benchmarks are disabled. This runner executes model-generated "
+                 "AND benchmark-supplied Python on your machine with no sandbox. Enable it deliberately "
+                 "and only for files you trust:\n    BENCHY_ALLOW_CODE_EXEC=1 python3 eval_code.py ...\n"
+                 "(set the same var in the dashboard's environment to allow code runs from the UI).")
     path = sys.argv[1]
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 50
     think = len(sys.argv) > 3 and sys.argv[3] == "think"
@@ -143,7 +144,7 @@ def main():
            "benchmark": bench, "mode": mode, "n": len(rows), "correct": passed,
            "accuracy": round(acc, 1), "seed": SEED, "duration_s": round(dt),
            "sec_per_q": round(dt / max(1, len(rows)), 1), "kind": "code", "notes": notes,
-           "details": os.path.basename(detfile)}
+           "details": os.path.basename(detfile), **bc.run_meta(MODEL, SERVER_BASE, path)}
     open(RUNS, "a").write(json.dumps(rec) + "\n")
     write_live({"running": False, "tag": tag, "benchmark": bench, "mode": mode,
                 "i": len(rows), "n": len(rows), "correct": passed,

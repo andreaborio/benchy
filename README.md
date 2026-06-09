@@ -5,8 +5,9 @@
 `benchy` runs a panel of question-answering benchmarks against any OpenAI-compatible
 inference server, scores them deterministically, and shows the results — accuracy,
 confidence intervals, per-question drill-down, and live system metrics — in a single-file
-web dashboard. Everything about the model and host is **auto-detected** (model id from the
-server, RAM/CPU/OS from the machine); nothing is hardcoded, so you clone it and run.
+web dashboard. The model id is **auto-detected** from the server and the scoring core runs
+anywhere Python does; nothing about your model is hardcoded, so you clone it and run. (The
+*live host-metrics* panels are macOS-oriented — see [Methodology](#methodology--caveats-read-before-quoting-numbers).)
 
 It talks plain OpenAI Chat Completions, so it works against llama.cpp / vLLM / Ollama /
 LM Studio / [ds4](#works-with-any-openai-compatible-server) — anything that serves
@@ -18,19 +19,36 @@ LM Studio / [ds4](#works-with-any-openai-compatible-server) — anything that se
   (executed), MedXpertQA, MedMCQA, MedQA, plus a legacy panel — each tagged **current**
   (still discriminates mid-2026 models) or **legacy** (saturated). `fetch_benchmarks.py current`.
 - **Bring your own benchmark** — any `{question, options{A..}, answer_idx}` JSONL drops
-  straight in. Add coding, domain, or private sets without touching the code.
-- **Deterministic scoring** — greedy decoding, fixed seed, letter-bias (χ²) checks,
-  Wilson 95% confidence intervals.
+  straight in (`answer_idx` may be the option **letter** `"B"` or a 0-based **integer** `1`).
+  Add coding, domain, or private sets without touching the code.
+- **Deterministic, bias-aware scoring** — greedy decoding, fixed seed, **anchored
+  case-sensitive answer extraction** (prose like “…a common cause” is never mistaken for
+  option *A*), **per-question option-order randomization** to average out letter-position
+  bias (`BENCHY_SHUFFLE_OPTIONS=0` to disable), letter-bias (χ²) checks, Wilson 95% CIs, and
+  an **unparseable-rate** recorded per run.
+- **Paired A/B significance (McNemar)** — compare two run tags on the *same* questions with
+  an exact McNemar test. This is the correct way to ask “does quant A differ from quant B”
+  and is far more powerful than eyeballing two overlapping Wilson bars. (In the dashboard:
+  the **Paired A/B significance** card.)
 - **Live dashboard** — per-question feed with drill-down, running accuracy, accuracy vs.
-  your own reference baselines, and live host/server metrics (model RSS, decode t/s,
-  system memory & swap).
-- **Auto-detect + guided setup** — the model id and host specs are read live; an in-UI
+  your own reference baselines, and live host/server metrics (model RSS, decode t/s, system
+  memory & swap). ⚠ **The live system-metrics panels are macOS-only and decode t/s is parsed
+  from a ds4-style server log** — on other OSes/servers those panels stay empty; the
+  benchmarks themselves still run everywhere.
+- **Local-only & guarded** — the dashboard binds to `127.0.0.1` and its process-control
+  endpoints require a per-launch CSRF token plus same-origin/Host checks, so a random web
+  page you visit can’t drive your local server. Code-generation benchmarks that **execute
+  model-written code** are **off by default** (`BENCHY_ALLOW_CODE_EXEC=1` to enable).
+- **Reproducible run records** — every `runs.jsonl` row stamps the **model id**, server,
+  benchy git SHA, dataset content hash, and host, so a published number is traceable.
+- **Auto-detect + guided setup** — the model id is read live from `/v1/models`; an in-UI
   **Setup** panel lets you add optional comparison baselines and a display title (saved to
   a git-ignored `config.json`). No static values baked into the repo.
 - **`think` / `no-think` modes** — toggle server-side reasoning to measure the
   test-time-reasoning delta (sent as a `think` field; servers that don't use it ignore it).
 - **Zero pip dependencies** for the core — Python standard library only. (HealthBench
-  grading needs one API key; see below.)
+  grading needs one API key; the dashboard charts load Chart.js from a CDN — if offline, the
+  charts are skipped and the rest of the UI still works.)
 
 ## How it works
 
@@ -118,9 +136,12 @@ grading), SimpleQA & IFEval (judge / programmatic verifiers), ARC-AGI (grid prog
 
 **Code benchmarks** (HumanEval, MBPP) are run by `eval_code.py`: the model writes a function
 and `benchy` **executes it against the task's tests** to score pass@1.
-> ⚠ This runs model-generated code on your machine — each candidate in a separate process
-> with a timeout (`BENCHY_CODE_TIMEOUT`, default 12s). Only run locally with models/benchmarks
-> you trust. (Agentic / repo-level sets like SWE-bench are out of scope.)
+> ⚠ This runs model-generated **and benchmark-supplied** code on your machine — each candidate
+> in a separate process with a timeout (`BENCHY_CODE_TIMEOUT`, default 12s) but **no sandbox**
+> (no filesystem/network isolation). It is therefore **off by default**: enable it deliberately
+> with `BENCHY_ALLOW_CODE_EXEC=1` (set it in the dashboard's environment to allow code runs from
+> the UI), and only for models/benchmarks you trust. (Agentic / repo-level sets like SWE-bench
+> are out of scope.)
 
 **HealthBench** is fetched and run separately by `healthbench.py` (rubric-graded by an
 external judge — see Quickstart step 4). Rubric scores are a 0–100 rubric mean, **not**
@@ -134,6 +155,19 @@ are **not** redistributed here; `fetch_benchmarks.py` downloads them on demand.
 
 `benchy` is built to be honest about its own limits:
 
+- **Comparing two builds? Use the paired test.** Two independent runs’ Wilson CIs overlapping
+  does **not** mean the builds are equal — on the same questions a few-point quant delta is
+  often significant. Use the **Paired A/B significance (McNemar)** card, which pairs the runs
+  question-by-question. For that to be valid, run both tags on the **same benchmark file** so
+  they share questions (and keep `BENCHY_SHUFFLE_OPTIONS` at its default so both see the same
+  per-question option order).
+- **Answer extraction is heuristic.** The MCQ scorer reads the chosen letter from free text
+  with an anchored, case-sensitive parser and records an **unparseable rate** per run — a
+  rising unparseable rate is itself a quant-quality signal. It is robust but not perfect; for
+  the cleanest measurement prefer a server with constrained/logprob decoding.
+- **Position bias is mitigated, not eliminated.** Option order is randomized per question
+  (seeded by the question text, so every model/quant sees the same order). Letter-position
+  bias is also reported (χ²); residual bias on tiny N can still move a point or two.
 - **Small-N noise.** Quick runs use small N; accuracies carry **Wilson 95% CIs**. Treat two
   results whose CIs overlap as indistinguishable.
 - **Reference baselines.** `benchy` ships published **frontier-model scores** for several
@@ -144,17 +178,29 @@ are **not** redistributed here; `fetch_benchmarks.py` downloads them on demand.
 - **Rubric scores ≠ accuracy.** HealthBench-style scores are the fraction of weighted rubric
   points met (0–100), graded by an external judge — not directly comparable to MCQ accuracy
   and excluded from the macro-average.
-- **Live system metrics are host-level where labelled** (system memory/swap are
-  whole-machine; "model RSS" is the server process). Decode t/s is parsed from the server's
-  log and is engine-specific (best-effort; absent for servers with a different log format).
-- **Determinism** assumes a greedy, temperature-0 server; results can still drift with
-  thermal throttling, page-cache state, and server build.
+- **Live system metrics are macOS-only and host-level where labelled** (system memory/swap
+  are whole-machine via `vm_stat`/`sysctl`; "model RSS" is the server process via `ps`). On
+  Linux/Windows these panels are empty — the benchmarks and scoring are unaffected.
+- **Decode t/s is parsed from a ds4-style server log** and is engine-specific (best-effort).
+  For llama.cpp / vLLM / Ollama / LM Studio the format differs, so the decode-throughput card
+  and per-question prefill/decode timing may show nothing. The accuracy results do not depend
+  on it.
+- **Determinism** assumes a greedy, temperature-0 server; `temperature=0` is **not** a
+  guarantee — batched/quantized inference can still vary run-to-run, and results drift with
+  thermal throttling, page-cache state, and server build. Prefer larger N (and the paired
+  test) when a delta matters.
+- **Code-execution benchmarks are off by default.** HumanEval/MBPP execute model-written
+  *and* benchmark-supplied Python on your host with only a subprocess + timeout (no sandbox).
+  Enable deliberately with `BENCHY_ALLOW_CODE_EXEC=1` and only for files you fetched yourself.
 
 ## Works with any OpenAI-compatible server
 
-`benchy` only consumes the standard OpenAI API (`/v1/chat/completions`, `/v1/models`) and the
-server's log output for live timing — it neither patches nor requires any specific engine.
-It was developed against **ds4** (a.k.a. *DwarfStar*), the DeepSeek-V4-Flash inference engine
+`benchy` only consumes the standard OpenAI API (`/v1/chat/completions`, `/v1/models`) for
+benchmarking — it neither patches nor requires any specific engine, so **accuracy/scoring work
+with any OpenAI-compatible server**. The *live decode-t/s* panel is the one exception: it
+scrapes the server's stdout log in a **ds4-style format**, so for llama.cpp / vLLM / Ollama /
+LM Studio that panel may stay empty (the benchmarks still run). `benchy`
+was developed against **ds4** (a.k.a. *DwarfStar*), the DeepSeek-V4-Flash inference engine
 by **Salvatore Sanfilippo ([antirez](https://github.com/antirez))**; the in-UI "Start server"
 button falls back to a ds4 checkout (`DS4_DIR`) but you can point it at any command via
 `config.json` (`"server": {"cmd": [...]}`). ds4 is a separate project under its own license —

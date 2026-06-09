@@ -13,6 +13,7 @@ Env: BENCHY_SERVER (default http://127.0.0.1:8000), BENCHY_MODEL (default: auto-
 Reads the grader API key from a .apikey file next to this script (provider auto-detected; never logged).
 """
 import json, os, re, sys, time, random, datetime, urllib.request
+import benchy_common as bc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data"); RES = os.path.join(HERE, "results"); DET = os.path.join(RES, "details")
@@ -20,18 +21,7 @@ SERVER_BASE = os.environ.get("BENCHY_SERVER", "http://127.0.0.1:8000").rstrip("/
 SERVER = SERVER_BASE + "/v1/chat/completions"
 SEED = 1234
 
-def resolve_model():
-    """Model id for chat payloads: BENCHY_MODEL override > server's /v1/models > 'default'."""
-    if os.environ.get("BENCHY_MODEL"): return os.environ["BENCHY_MODEL"]
-    try:
-        with urllib.request.urlopen(SERVER_BASE + "/v1/models", timeout=5) as r:
-            ids = [m.get("id") for m in (json.load(r).get("data") or []) if m.get("id")]
-        if ids: return ids[0]
-    except Exception:
-        pass
-    return "default"
-
-MODEL = resolve_model()
+MODEL = bc.resolve_model(SERVER_BASE)
 URLS = {"hard": "https://huggingface.co/datasets/openai/healthbench/resolve/main/hard_2025-05-08-21-00-10.jsonl",
         "consensus": "https://huggingface.co/datasets/openai/healthbench/resolve/main/consensus_2025-05-09-20-00-46.jsonl"}
 # default grader per provider; OpenAI gpt-4.1 = the official HealthBench judge
@@ -154,7 +144,8 @@ def main():
            "mode": "thinking" if think else "nothink", "n": len(scores), "accuracy": final, "seed": SEED,
            "duration_s": round(time.time() - t0, 1), "sec_per_q": round((time.time() - t0) / max(1, len(scores)), 1),
            "grader": model, "details": os.path.basename(detfile),
-           "notes": f"HealthBench {subset}, faithful API judge ({model})"}
+           "notes": f"HealthBench {subset}, faithful API judge ({model})",
+           **bc.run_meta(MODEL, SERVER_BASE, path)}
     open(os.path.join(RES, "runs.jsonl"), "a").write(json.dumps(run) + "\n")
     json.dump({"running": False}, open(os.path.join(RES, "live.json"), "w"))
     print(f"DONE — HealthBench {subset}: {final}%  (N={len(scores)}, grader={model})")

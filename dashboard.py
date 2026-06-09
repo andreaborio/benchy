@@ -13,8 +13,9 @@ Nothing about the model or host is hardcoded: the model id is read from the serv
 /v1/models endpoint and host specs from the OS. Optional comparison baselines and a
 display title live in a git-ignored config.json (written by the in-UI guided setup).
 """
-import json, os, sys, re, math, datetime, subprocess, threading, time, collections, platform
+import json, os, sys, re, math, datetime, subprocess, threading, time, collections, platform, secrets
 import urllib.request as ureq
+from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -37,6 +38,9 @@ try: SERVER_PORT = int(re.search(r":(\d+)", SERVER_BASE).group(1))
 except Exception: SERVER_PORT = 8000
 DS4 = os.environ.get("DS4_DIR", os.path.expanduser("~/ds4"))  # optional ds4 checkout: fallback for the start-server button when config.json has no server.cmd
 PROC = {"eval": None, "server": None, "fetch": None}
+ALLOW_CODE_EXEC = os.environ.get("BENCHY_ALLOW_CODE_EXEC", "").lower() in ("1", "true", "yes", "on")  # gate model-code execution
+CSRF_TOKEN = secrets.token_hex(16)  # per-launch token; required as X-Benchy-CSRF on every POST (CSRF/DNS-rebind guard)
+DASH_PORT = 8050                     # overwritten in __main__ from argv; used for the Host allowlist
 HISTORY = os.path.join(RESULTS, "metrics.jsonl")
 HIST = collections.deque(maxlen=900)   # ~30 min @ 2s — survives browser refresh; persisted to metrics.jsonl
 
@@ -269,6 +273,9 @@ def start_eval(p):
     except Exception: n = 25
     mode = "think" if p.get("mode") == "thinking" else "nothink"
     tag = (re.sub(r"[^A-Za-z0-9_.-]", "", str(p.get("tag", "run"))) or "run")[:40]
+    if bench != "healthbench_hard" and bench_kind(path) == "code" and not ALLOW_CODE_EXEC:
+        return {"ok": False, "error": "code-execution benchmarks run model-written code on this host and are "
+                "disabled by default. Relaunch the dashboard with BENCHY_ALLOW_CODE_EXEC=1 to enable them."}
     if bench == "healthbench_hard":
         # rubric-graded, not MCQ — needs the HealthBench runner (grader via .apikey)
         args = [sys.executable, os.path.join(HERE, "healthbench.py"), str(n), tag, mode, "hard"]
@@ -350,6 +357,78 @@ def is_rubric(b):
     """Rubric-graded (open-ended) benchmarks score a 0-100 rubric mean, not k/n correct,
     so they get no binomial CI / letter-bias and are excluded from the MCQ macro-average."""
     return bool(b) and b.startswith("healthbench")
+
+def _details_for(tag, bench, mode=None):
+    """The most-complete details file (largest n) for a (tag, benchmark[, mode]) run, parsed
+    into {question -> correct?}. Joining on question text lets two runs of different N be
+    compared on their overlapping questions."""
+    best = None
+    for r in read_jsonl(RUNS):
+        if r.get("tag") != tag or r.get("benchmark") != bench: continue
+        if mode and r.get("mode") != mode: continue
+        if not r.get("details"): continue
+        if best is None or (r.get("n") or 0) > (best.get("n") or 0):
+            best = r
+    if not best:
+        return None, {}
+    fp = os.path.join(RESULTS, "details", os.path.basename(best["details"]))
+    by_q = {}
+    try:
+        for line in open(fp):
+            line = line.strip()
+            if not line: continue
+            d = json.loads(line)
+            q = str(d.get("question", "")).strip()
+            if q and "ok" in d:
+                by_q[q] = bool(d["ok"])
+    except Exception:
+        return best, {}
+    return best, by_q
+
+def _mcnemar_p(b, c):
+    """Two-sided McNemar p-value over the b+c discordant pairs: exact binomial (p=0.5) for
+    moderate counts, continuity-corrected normal approximation for large ones."""
+    n = b + c
+    if n == 0:
+        return 1.0
+    if n <= 2000:
+        k = min(b, c)
+        tail = sum(math.comb(n, i) for i in range(0, k + 1)) / (2.0 ** n)
+        return min(1.0, 2.0 * tail)
+    z = (abs(b - c) - 1) / math.sqrt(n)
+    return math.erfc(z / math.sqrt(2))
+
+def paired_compare(tag_a, tag_b, bench, mode=None):
+    """McNemar paired comparison of two runs on the SAME benchmark over their COMMON questions —
+    the statistically correct test for 'does quant A differ from quant B', far more powerful than
+    eyeballing two independent Wilson intervals (it uses the per-question pairing)."""
+    if not tag_a or not tag_b or not bench:
+        return {"ok": False, "error": "pick two run tags and a benchmark"}
+    if tag_a == tag_b:
+        return {"ok": False, "error": "pick two different tags"}
+    if is_rubric(bench):
+        return {"ok": False, "error": "paired test applies to MCQ/code (pass/fail) benchmarks, not rubric-graded ones"}
+    ra, qa = _details_for(tag_a, bench, mode)
+    rb, qb = _details_for(tag_b, bench, mode)
+    if not ra or not rb:
+        return {"ok": False, "error": "need a completed run with per-question details for both tags on this benchmark"}
+    common = sorted(set(qa) & set(qb))
+    if not common:
+        return {"ok": False, "error": "the two runs share no common questions (different benchmark file or no overlap)"}
+    nc = len(common)
+    both_right = sum(1 for q in common if qa[q] and qb[q])
+    both_wrong = sum(1 for q in common if not qa[q] and not qb[q])
+    a_better = sum(1 for q in common if qa[q] and not qb[q])     # A correct, B wrong
+    b_better = sum(1 for q in common if not qa[q] and qb[q])     # B correct, A wrong
+    acc_a = round(100 * sum(1 for q in common if qa[q]) / nc, 1)
+    acc_b = round(100 * sum(1 for q in common if qb[q]) / nc, 1)
+    p = _mcnemar_p(a_better, b_better)
+    return {"ok": True, "tag_a": tag_a, "tag_b": tag_b, "benchmark": bench, "mode": mode,
+            "n_common": nc, "n_a": ra.get("n"), "n_b": rb.get("n"),
+            "acc_a": acc_a, "acc_b": acc_b, "delta": round(acc_a - acc_b, 1),
+            "a_better": a_better, "b_better": b_better, "discordant": a_better + b_better,
+            "both_right": both_right, "both_wrong": both_wrong,
+            "p_value": round(p, 4), "significant": bool(p < 0.05)}
 
 def summary():
     """Server-side stats over runs.jsonl x optional reference baselines: Wilson CIs,
@@ -826,6 +905,18 @@ canvas{max-height:280px}
 <!-- EXPERIMENT -->
 <div class="sec" id="experiment" style="margin-top:18px"><div class="card" id="expCard"></div></div>
 
+<!-- PAIRED A/B (McNemar) -->
+<div class="sec" id="paired" style="margin-top:18px"><div class="card">
+  <h3>Paired A/B significance <span class="hint">McNemar on the same questions — the correct test for "does quant A differ from quant B"</span></h3>
+  <div class="toolbar" style="margin:11px 0 0;flex-wrap:wrap;gap:8px;align-items:center">
+    <select id="cmpA" title="run tag A"></select><span class="muted">vs</span><select id="cmpB" title="run tag B"></select>
+    <select id="cmpBench" title="benchmark"></select>
+    <select id="cmpMode" title="reasoning mode"><option value="">any mode</option><option value="thinking">thinking</option><option value="nothink">nothink</option></select>
+    <button class="btn g" onclick="runCompare()">Compare</button>
+  </div>
+  <div id="cmpResult" class="muted" style="font-size:12.5px;margin:12px 0 0;line-height:1.6">Pick two run tags and a benchmark, then Compare — this pairs the two runs question-by-question (a far more powerful test than comparing two independent confidence intervals).</div>
+</div></div>
+
 <!-- CONTROL -->
 <div class="sec" id="control"><div class="grid g2">
   <div class="card"><h3>Model server</h3>
@@ -969,6 +1060,11 @@ canvas{max-height:280px}
 
 <div id="toasts"></div>
 <script>
+const CSRF="__BENCHY_CSRF__";
+/* Inject the per-launch CSRF token on every state-changing request. A cross-site page can't
+   read this token (same-origin policy hides our HTML), so its forged POSTs are rejected. */
+(function(){const _f=window.fetch;window.fetch=function(u,o){o=o||{};const m=(o.method||'GET').toUpperCase();
+  if(m!=='GET'&&m!=='HEAD'){o.headers=Object.assign({'X-Benchy-CSRF':CSRF},o.headers||{});}return _f.call(this,u,o);};})();
 let RUNS=[],PERF=[],META={},SUMMARY={},LIVE={},STREAM={},SYS={},ACT={},HISTM=[];
 let VIEW='acc',SORT={k:'ts',d:-1},RMODE='thinking',FEEDF='all',DETF='all',DET=[],DETFILE='',charts={},_sid=0,_dataSig='',_streamSig='',_sparkSig='',_expSig='',accBenchUser=false,rBenchUser=false;
 function setText(id,t){const e=$(id);if(e&&e.textContent!==t)e.textContent=t;}
@@ -987,9 +1083,13 @@ function chart(id,cfg){const ex=charts[id];
     ex.data.labels=(cfg.data&&cfg.data.labels)||[];
     if(nd.length!==ex.data.datasets.length)ex.data.datasets=nd;else nd.forEach((d,i)=>Object.assign(ex.data.datasets[i],d));
     if(cfg.options)ex.options=cfg.options;ex.update('none');return;}
-  if(ex)ex.destroy();const c=$(id);if(c)charts[id]=new Chart(c,cfg);}
-const grid='#1b1b1e';Chart.defaults.color='#8a8a8a';Chart.defaults.font.family='Inter';Chart.defaults.borderColor=grid;Chart.defaults.animation=false;
-Chart.defaults.interaction={mode:'index',intersect:false};Chart.defaults.plugins.tooltip.displayColors=false;Chart.defaults.plugins.tooltip.padding=8;Chart.defaults.plugins.tooltip.titleColor='#ededed';Chart.defaults.plugins.tooltip.bodyColor='#ededed';Chart.defaults.plugins.tooltip.backgroundColor='#16161a';Chart.defaults.plugins.tooltip.borderColor='#2a2a2e';Chart.defaults.plugins.tooltip.borderWidth=1;Chart.defaults.elements.point.hoverRadius=5;
+  if(ex)ex.destroy();const c=$(id);if(c&&window.Chart)charts[id]=new Chart(c,cfg);}
+const grid='#1b1b1e';
+/* Chart.js is a CDN dependency; if it failed to load (offline/air-gapped), guard every global
+   access so the rest of the dashboard still boots instead of dying on a ReferenceError. */
+if(window.Chart){Chart.defaults.color='#8a8a8a';Chart.defaults.font.family='Inter';Chart.defaults.borderColor=grid;Chart.defaults.animation=false;
+Chart.defaults.interaction={mode:'index',intersect:false};Chart.defaults.plugins.tooltip.displayColors=false;Chart.defaults.plugins.tooltip.padding=8;Chart.defaults.plugins.tooltip.titleColor='#ededed';Chart.defaults.plugins.tooltip.bodyColor='#ededed';Chart.defaults.plugins.tooltip.backgroundColor='#16161a';Chart.defaults.plugins.tooltip.borderColor='#2a2a2e';Chart.defaults.plugins.tooltip.borderWidth=1;Chart.defaults.elements.point.hoverRadius=5;}
+else{console.warn('benchy: Chart.js failed to load (offline?) — charts disabled, the rest of the dashboard still works.');}
 if(window.marked)marked.setOptions({breaks:true,gfm:true});
 
 /* ---------- clipboard + toast ---------- */
@@ -1090,6 +1190,34 @@ function systemUI(){
   setText('sysCpu',last.cpu!=null?Math.round(last.cpu)+'%':'—');
   const cpu=h.map(r=>r.up?(r.cpu!=null?r.cpu:0):null),cpuMax=Math.max(100,...cpu.filter(x=>x!=null));
   chart('sysCpuChart',{type:'line',data:{labels,datasets:[{data:cpu,borderColor:'#0cce6b',backgroundColor:'rgba(12,206,107,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:false}]},options:sysOpts('%',Math.ceil(cpuMax/10)*10)});
+}
+/* ---------- paired A/B (McNemar) ---------- */
+function populateCompare(){
+  const tags=[...new Set((RUNS||[]).map(r=>r.tag).filter(Boolean))];
+  const benches=[...new Set((RUNS||[]).filter(r=>!String(r.benchmark||'').startsWith('healthbench')).map(r=>r.benchmark).filter(Boolean))];
+  const fill=(id,vals,label)=>{const s=$(id);if(!s)return;const cur=s.value;s.innerHTML=vals.map(v=>`<option value="${esc(v)}">${esc(label?label(v):v)}</option>`).join('');if(vals.includes(cur))s.value=cur;};
+  fill('cmpA',tags);fill('cmpB',tags);fill('cmpBench',benches,nice);
+  const A=$('cmpA'),B=$('cmpB');
+  if(A&&B&&tags.length>=2&&A.value===B.value){B.value=tags.find(t=>t!==A.value)||tags[1];}
+}
+function fmtCompare(d){
+  if(!d||!d.ok)return '<span class="muted">'+esc((d&&d.error)||'no result')+'</span>';
+  const verdict=d.significant
+    ? `<b style="color:${d.delta>0?'var(--ok)':'var(--dang)'}">${esc(d.tag_a)} ${d.delta>0?'>':'<'} ${esc(d.tag_b)}</b> — <b>significant</b> (p=${d.p_value})`
+    : `<b style="color:var(--warn)">no significant difference</b> (p=${d.p_value})`;
+  return `<div style="font-size:13.5px">${verdict}</div>
+    <div class="mono" style="margin-top:7px">${esc(d.tag_a)} <b>${d.acc_a}%</b> · ${esc(d.tag_b)} <b>${d.acc_b}%</b> · Δ <b>${d.delta>0?'+':''}${d.delta} pts</b> · N=${d.n_common} common</div>
+    <div class="mono muted" style="margin-top:4px">discordant ${d.discordant} ( ${esc(d.tag_a)}-only ${d.a_better} · ${esc(d.tag_b)}-only ${d.b_better} ) · both ✓ ${d.both_right} · both ✗ ${d.both_wrong}</div>
+    <div class="muted" style="margin-top:7px;font-size:11.5px">McNemar exact two-sided over the ${d.discordant} discordant pairs. A small p means the two builds genuinely disagree on these questions — overlapping Wilson bars can't detect a paired difference this small.</div>`;
+}
+async function runCompare(){
+  const a=$('cmpA').value,b=$('cmpB').value,bench=$('cmpBench').value,mode=$('cmpMode').value,el=$('cmpResult');
+  if(!el)return;
+  if(!a||!b||!bench){el.innerHTML='<span class="muted">pick two run tags and a benchmark</span>';return;}
+  el.textContent='comparing…';
+  try{const qs='/api/compare?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+'&bench='+encodeURIComponent(bench)+(mode?'&mode='+encodeURIComponent(mode):'');
+    el.innerHTML=fmtCompare(await fetch(qs).then(r=>r.json()));}
+  catch(e){el.innerHTML='<span class="muted">compare failed</span>';}
 }
 /* ---------- accuracy ---------- */
 function accbars(){
@@ -1504,7 +1632,7 @@ async function loadAll(){try{
   const ab=$('accBench'),cur=ab.value,asig=benches.join(',');if(ab.dataset.sig!==asig){ab.innerHTML=tieredOptions(benches,cur,'reference / gated');if(cur)ab.value=cur;ab.dataset.sig=asig;}
   envStrip();experimentBand();syncBench();
   const sig=RUNS.length+'|'+PERF.length+'|'+(RUNS.length?RUNS[RUNS.length-1].ts:'')+'|'+JSON.stringify(SUMMARY.macro||{});
-  if(sig!==_dataSig){_dataSig=sig;accbars();renderRuns();}
+  if(sig!==_dataSig){_dataSig=sig;accbars();renderRuns();populateCompare();}
 }catch(e){console.error(e)}}
 loadAll();setInterval(loadAll,6000);pulse();setInterval(pulse,1500);
 </script></body></html>"""
@@ -1523,9 +1651,21 @@ class H(BaseHTTPRequestHandler):
         if not n: return {}
         try: return json.loads(self.rfile.read(n).decode() or "{}")
         except Exception: return {}
+    def _guard(self):
+        """Reject cross-site / DNS-rebound POSTs: the Host must be a loopback:port we serve
+        (defeats DNS rebinding), any Origin/Referer present must be same-origin, and the
+        per-launch CSRF token must match (only our own same-origin page can read it)."""
+        allowed = {"127.0.0.1:%d" % DASH_PORT, "localhost:%d" % DASH_PORT}
+        host = (self.headers.get("Host") or "").strip()
+        if host and host not in allowed:
+            return False
+        origin = self.headers.get("Origin") or self.headers.get("Referer") or ""
+        if origin and urlparse(origin).hostname not in ("127.0.0.1", "localhost"):
+            return False
+        return self.headers.get("X-Benchy-CSRF", "") == CSRF_TOKEN
     def do_GET(self):
         p = self.path.split("?")[0]
-        if p == "/" or p.startswith("/index"): self._send(200, PAGE)
+        if p == "/" or p.startswith("/index"): self._send(200, PAGE.replace("__BENCHY_CSRF__", CSRF_TOKEN))
         elif p == "/api/runs": self._json(read_jsonl(RUNS))
         elif p == "/api/perf": self._json(read_jsonl(PERF))
         elif p == "/api/meta": self._json(dict(meta_payload(), benchmarks=benchmarks()))
@@ -1537,6 +1677,10 @@ class H(BaseHTTPRequestHandler):
                 b["baselines"] = len(SHIPPED_REFS.get(b["key"], []))   # # of shipped frontier baselines
             self._json(dict(meta, fetching=fetching))
         elif p == "/api/summary": self._json(summary())
+        elif p == "/api/compare":
+            q = parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+            g = lambda k: (q.get(k) or [""])[0]
+            self._json(paired_compare(g("a"), g("b"), g("bench"), g("mode") or None))
         elif p == "/api/sys": self._json(sysmetrics())
         elif p == "/api/activity": self._json(activity())
         elif p == "/api/history": self._json(list(HIST))
@@ -1650,6 +1794,8 @@ class H(BaseHTTPRequestHandler):
         save_config(cfg)
         return {"ok": True, "config": cfg}
     def do_POST(self):
+        if not self._guard():
+            return self._send(403, "forbidden — cross-site request or missing/invalid CSRF token", "text/plain")
         p = self.path.split("?")[0]
         if p == "/api/chat": self.stream_chat(self._body())
         elif p == "/api/run": self._json(start_eval(self._body()))
@@ -1663,8 +1809,11 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8050
+    DASH_PORT = port   # Host-header allowlist for the CSRF guard
     os.makedirs(RESULTS, exist_ok=True)
     _load_history()
     threading.Thread(target=_sample_metrics, daemon=True).start()
     print("benchy -> http://127.0.0.1:%d" % port, flush=True)
+    if ALLOW_CODE_EXEC:
+        print("⚠ BENCHY_ALLOW_CODE_EXEC is set — code-generation benchmarks will EXECUTE model-written code on this host.", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
