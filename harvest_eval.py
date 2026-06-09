@@ -6,11 +6,9 @@ The eval harness already persists per-question detail under results/details/*.js
 accumulated signal into:
 
   1. results/lora_hard_examples.jsonl  — the questions the model got WRONG, paired
-     with the correct answer. This is the gold for a future medical LoRA (point ② —
-     "use the inferences as DATA"): hard examples are the most valuable to train on.
-  2. results/imatrix_corpus_from_eval.txt (optional) — every evaluated question as
-     plain medical text, ready to feed `ds4 --imatrix-dataset` for a future, richer
-     imatrix collection (calibrate quantization on the exact target workload).
+     with the correct answer. Hard examples are the most valuable to fine-tune on.
+  2. results/eval_corpus.txt (optional) — every evaluated question as plain text, ready
+     to use as a calibration/importance-matrix corpus drawn from the exact target workload.
 
 Run any time; it re-reads all detail files and dedups by question. No model needed.
 Usage: harvest_eval.py
@@ -20,7 +18,7 @@ import json, os, glob, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 DET = os.path.join(HERE, "results", "details")
 OUT_LORA = os.path.join(HERE, "results", "lora_hard_examples.jsonl")
-OUT_CORPUS = os.path.join(HERE, "results", "imatrix_corpus_from_eval.txt")
+OUT_CORPUS = os.path.join(HERE, "results", "eval_corpus.txt")
 
 def bench_of(fn):  # details file name is "<benchmark>__<mode>__<ts>.jsonl"
     return os.path.basename(fn).split("__")[0]
@@ -62,8 +60,8 @@ def main():
     for b, n in sorted(per_bench.items(), key=lambda x: -x[1]):
         print(f"    {b}: {n} wrong")
     print(f"eval corpus (all questions) -> {OUT_CORPUS}: {len(corpus)} passages")
-    print("\nThese feed: (a) a future medical LoRA (hard examples), and")
-    print("(b) a richer imatrix (`ds4 --imatrix-dataset imatrix_corpus_from_eval.txt`).")
+    print("\nThese feed: (a) fine-tuning on hard examples, and")
+    print("(b) a calibration/importance-matrix corpus drawn from the eval workload.")
 
 if __name__ == "__main__":
     main()

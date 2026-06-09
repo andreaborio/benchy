@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
-"""BeepMed Benchmark Explorer — local control center for ds4 medical evals.
+"""benchy — local LLM benchmark explorer & live dashboard.
 
   python3 dashboard.py [port]      # default 8050  ->  http://127.0.0.1:8050
 
-Stdlib backend (no pip deps), polished SPA (Chart.js via CDN). Lets you:
+Stdlib backend (no pip deps), single-file SPA (Chart.js via CDN). Lets you:
  - watch a live Q/A stream + real-time accuracy chart,
  - watch the model's real-time decode activity (tokens/s, phase, throughput),
  - launch the model server and an eval run from the UI,
  - explore accuracy + performance benchmarks and export a Markdown report.
+
+Nothing about the model or host is hardcoded: the model id is read from the server's
+/v1/models endpoint and host specs from the OS. Optional comparison baselines and a
+display title live in a git-ignored config.json (written by the in-UI guided setup).
 """
-import json, os, sys, re, math, datetime, subprocess, threading, time, collections
+import json, os, sys, re, math, datetime, subprocess, threading, time, collections, platform
 import urllib.request as ureq
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import fetch_benchmarks as FB   # benchmark registry + downloader (optional)
+except Exception:
+    FB = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESULTS = os.path.join(HERE, "results")
@@ -20,74 +29,121 @@ RUNS = os.path.join(RESULTS, "runs.jsonl")
 PERF = os.path.join(RESULTS, "perf.jsonl")
 LIVE = os.path.join(RESULTS, "live.json")
 STREAM = os.path.join(RESULTS, "stream.jsonl")
-DS4 = os.environ.get("DS4_DIR", os.path.expanduser("~/ds4"))  # ds4 checkout (for the start-server button); override with DS4_DIR
-CHAT_URL = "http://127.0.0.1:8000/v1/chat/completions"
-PROC = {"eval": None, "server": None}
+CONFIG_PATH = os.path.join(HERE, "config.json")  # optional local settings (git-ignored); written by guided setup
+SERVER_BASE = os.environ.get("BENCHY_SERVER", "http://127.0.0.1:8000").rstrip("/")  # OpenAI-compatible server
+CHAT_URL = SERVER_BASE + "/v1/chat/completions"
+MODELS_URL = SERVER_BASE + "/v1/models"
+try: SERVER_PORT = int(re.search(r":(\d+)", SERVER_BASE).group(1))
+except Exception: SERVER_PORT = 8000
+DS4 = os.environ.get("DS4_DIR", os.path.expanduser("~/ds4"))  # optional ds4 checkout: fallback for the start-server button when config.json has no server.cmd
+PROC = {"eval": None, "server": None, "fetch": None}
 HISTORY = os.path.join(RESULTS, "metrics.jsonl")
 HIST = collections.deque(maxlen=900)   # ~30 min @ 2s — survives browser refresh; persisted to metrics.jsonl
 
-META = {
-    "env": {
-        "Engine": "ds4 fork feat/onedge-imatrix @9afb525",
-        "Model": "DeepSeek-V4-Flash-IQ2 · medical imatrix (iq2-medimatrix) · 81 GB",
-        "Quant": "asymmetric 2-bit: experts IQ2_XXS/Q2_K, rest Q8",
-        "Class": "284B total / 13B active · 43 layers · 256 experts/layer",
-        "Machine": "Apple M5 Pro · 64 GB · macOS 26.5.1",
-        "Backend": "Metal-4 tensor API (M5 neural accelerators)",
-    },
-    "ram": {"footprint_gb": 44, "rss_gb": 40, "cache_gb": 40, "experts": 6068, "model_disk_gb": 81},
-    "correctness": {"test": "ds4_test --streaming-decode-prefill-correctness", "result": "PASS",
-                    "runs": 3, "cases": 5,
-                    "detail": "bit-identical (cold_warm_max_abs=0, warm_repeat_max_abs=0, top1==canonical)"},
-    "references": {
-        "medqa_test": [
-            {"label": "GPT-5", "accuracy": 95.8, "kind": "frontier", "source": "frontier report 2026"},
-            {"label": "o3 (≈ saturated)", "accuracy": 96.0, "kind": "frontier", "source": "approx (MedQA saturated ~96%)"},
-            {"label": "Gemini-2.5-Pro", "accuracy": 92.6, "kind": "frontier", "source": "comparative eval 2025-26"},
-            {"label": "DeepSeek-R1 (671B)", "accuracy": 90.0, "kind": "frontier", "source": "comparative eval 2025-26 (88-94 by setup)"},
-            {"label": "GPT-4o", "accuracy": 89.2, "kind": "frontier", "source": "comparative eval 2025-26"},
-            {"label": "MedGemma-27B (TTS)", "accuracy": 87.7, "kind": "ref", "source": "MedGemma report arXiv:2507.05201"},
-            {"label": "MedGemma-4B", "accuracy": 64.4, "kind": "ref", "source": "MedGemma report"},
-            {"label": "random chance", "accuracy": 25.0, "kind": "chance", "source": "chance"},
-        ],
-        "medmcqa": [
-            {"label": "Gemini-2.5-Pro", "accuracy": 82.7, "kind": "frontier", "source": "comparative eval 2025"},
-            {"label": "DeepSeek-R1", "accuracy": 79.9, "kind": "frontier", "source": "comparative eval 2025"},
-            {"label": "GPT-4o", "accuracy": 76.9, "kind": "frontier", "source": "comparative eval 2025"},
-            {"label": "MedGemma-27B (TTS)", "accuracy": 74.2, "kind": "ref", "source": "MedGemma report"},
-            {"label": "MedGemma-4B", "accuracy": 55.7, "kind": "ref", "source": "MedGemma report"},
-            {"label": "random chance", "accuracy": 25.0, "kind": "chance", "source": "chance"},
-        ],
-        "pubmedqa": [
-            {"label": "MedGemma-27B (TTS)", "accuracy": 76.8, "kind": "ref", "source": "MedGemma report"},
-            {"label": "Gemini-2.5-Pro", "accuracy": 76.4, "kind": "frontier", "source": "comparative eval 2025"},
-            {"label": "MedGemma-4B", "accuracy": 73.4, "kind": "ref", "source": "MedGemma report"},
-            {"label": "DeepSeek-R1", "accuracy": 73.2, "kind": "frontier", "source": "comparative eval 2025"},
-            {"label": "GPT-4o", "accuracy": 71.8, "kind": "frontier", "source": "comparative eval 2025"},
-            {"label": "random chance (3-opt)", "accuracy": 33.3, "kind": "chance", "source": "chance"},
-        ],
-        "mmlu_medical": [
-            {"label": "MedGemma-27B (TTS) (MMLU-Med ~avg)", "accuracy": 87.0, "kind": "ref", "source": "MedGemma report (approx avg)"},
-            {"label": "MedGemma-4B (MMLU-Med ~avg)", "accuracy": 66.0, "kind": "ref", "source": "MedGemma report (approx avg)"},
-            {"label": "random chance", "accuracy": 25.0, "kind": "chance", "source": "chance"},
-        ],
-        "medxpertqa": [
-            {"label": "o1", "accuracy": 44.7, "kind": "frontier", "source": "MedXpertQA leaderboard (Text avg)"},
-            {"label": "DeepSeek-R1 (same family)", "accuracy": 37.8, "kind": "frontier", "source": "MedXpertQA leaderboard"},
-            {"label": "o3-mini", "accuracy": 37.3, "kind": "frontier", "source": "MedXpertQA leaderboard"},
-            {"label": "Claude-3.5-Sonnet", "accuracy": 21.3, "kind": "frontier", "source": "MedXpertQA leaderboard"},
-            {"label": "Gemini-2.0-Flash", "accuracy": 20.6, "kind": "frontier", "source": "MedXpertQA leaderboard"},
-            {"label": "random chance (10-opt)", "accuracy": 10.0, "kind": "chance", "source": "chance"},
-        ],
-        "healthbench_hard": [
-            {"label": "GPT-5 (thinking)", "accuracy": 46.2, "kind": "frontier", "source": "OpenAI GPT-5 System Card"},
-            {"label": "GPT-5-mini (thinking)", "accuracy": 40.3, "kind": "frontier", "source": "OpenAI GPT-5 System Card"},
-            {"label": "o3", "accuracy": 31.6, "kind": "frontier", "source": "OpenAI HealthBench paper + System Card"},
-            {"label": "GPT-5 (main, non-thinking)", "accuracy": 25.5, "kind": "frontier", "source": "OpenAI GPT-5 System Card"},
-            {"label": "GPT-4o", "accuracy": 0.0, "kind": "frontier", "source": "OpenAI GPT-5 System Card (0 on Hard)"},
-        ],
-    },
-}
+def load_config():
+    """Optional local settings (config.json, git-ignored): reference baselines, display
+    title, server start command, etc. Empty by default so a fresh clone runs fully generic."""
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH) as f:
+                return json.load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+def save_config(cfg):
+    tmp = CONFIG_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cfg, f, indent=2)
+    os.replace(tmp, CONFIG_PATH)
+
+def load_shipped_references():
+    """Published frontier-model baselines shipped with the repo (references.json, git-tracked,
+    cited). Keys starting with '_' are notes. Merged under any config.json references."""
+    try:
+        with open(os.path.join(HERE, "references.json")) as f:
+            d = json.load(f) or {}
+        return {k: v for k, v in d.items() if not k.startswith("_") and isinstance(v, list)}
+    except Exception:
+        return {}
+
+SHIPPED_REFS = load_shipped_references()
+
+def merged_references(cfg):
+    """Shipped published baselines + the user's own (config.json). Per benchmark, a user
+    entry with the same label overrides the shipped one; otherwise both are shown."""
+    out = {b: list(lst) for b, lst in SHIPPED_REFS.items()}
+    for b, lst in (cfg.get("references") or {}).items():
+        if not isinstance(lst, list): continue
+        labels = {x.get("label") for x in lst}
+        out[b] = [x for x in out.get(b, []) if x.get("label") not in labels] + list(lst)
+    return out
+
+def detect_host():
+    """Best-effort host facts from the OS (no config, nothing hardcoded): total RAM,
+    CPU, OS — for the System-card denominator and the Environment chips."""
+    info = {"cores": os.cpu_count(), "machine": platform.machine(), "system": platform.system()}
+    try:
+        if platform.system() == "Darwin":
+            mem = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=3).stdout.strip()
+            if mem: info["mem_total_gb"] = round(int(mem) / 1e9, 1)
+            cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, timeout=3).stdout.strip()
+            if cpu: info["cpu"] = cpu
+            mac = platform.mac_ver()[0]
+            if mac: info["os"] = "macOS " + mac
+        else:
+            try:
+                with open("/proc/meminfo") as f:
+                    for ln in f:
+                        if ln.startswith("MemTotal"):
+                            info["mem_total_gb"] = round(int(ln.split()[1]) / 1e6, 1); break
+            except Exception:
+                pass
+            info["os"] = " ".join(x for x in (platform.system(), platform.release()) if x)
+    except Exception:
+        pass
+    return info
+
+DETECTED = {"model": None, "host": detect_host()}   # model filled in by the metrics sampler when the server is up
+
+def detect_model():
+    """The model id the server advertises on /v1/models (OpenAI-compatible), so the UI
+    shows whatever model is actually loaded — never a hardcoded name."""
+    try:
+        with ureq.urlopen(MODELS_URL, timeout=2) as r:
+            data = json.load(r).get("data") or []
+        ids = [m.get("id") for m in data if isinstance(m, dict) and m.get("id")]
+        return ids[0] if ids else None
+    except Exception:
+        return None
+
+def model_id():
+    """Model id to send in chat/eval payloads: explicit BENCHY_MODEL override > detected > 'default'."""
+    return os.environ.get("BENCHY_MODEL") or DETECTED.get("model") or "default"
+
+def meta_payload():
+    """Identity/config for the UI — all auto-detected or from the optional config.json.
+    No static model/hardware/benchmark values are baked in."""
+    cfg = load_config()
+    host = DETECTED.get("host") or {}
+    model = DETECTED.get("model") or cfg.get("model_name")
+    env = {}
+    if model: env["Model"] = model
+    machine = " · ".join(str(x) for x in (host.get("cpu") or host.get("machine"),
+                         (str(host["mem_total_gb"]) + " GB RAM") if host.get("mem_total_gb") else None,
+                         host.get("os")) if x)
+    if machine: env["Machine"] = machine
+    env.update(cfg.get("env") or {})   # optional user-supplied chips (engine, quant, build…)
+    return {
+        "title": cfg.get("title") or "benchy",
+        "subtitle": cfg.get("subtitle"),   # None -> the HTML keeps its generic default
+        "model": model, "host": host, "env": env, "server": SERVER_BASE,
+        "references": merged_references(cfg),
+        "options": cfg.get("options") or {},
+        "baseline_tag": cfg.get("baseline_tag") or "baseline",
+        "primary_ref": cfg.get("primary_ref"),
+        "configured": bool(cfg),
+    }
 
 def read_jsonl(path):
     if not os.path.exists(path): return []
@@ -145,38 +201,80 @@ def read_stream():
 
 def benchmarks():
     if not os.path.isdir(DATA): return []
-    return sorted(f[:-6] for f in os.listdir(DATA) if f.endswith(".jsonl"))
+    return sorted(f[:-6] for f in os.listdir(DATA)
+                  if f.endswith(".jsonl") and os.path.getsize(os.path.join(DATA, f)) > 0)
+
+def bench_kind(path):
+    """Peek a benchmark file's first row to pick the runner: 'code' (has tests/entry_point)
+    vs 'mcq' (has options). Works for bundled and user-supplied files alike."""
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line: continue
+                row = json.loads(line)
+                if "options" in row: return "mcq"
+                if "tests" in row or "entry_point" in row: return "code"
+                return "mcq"
+    except Exception:
+        pass
+    return "mcq"
 
 def server_up():
     try:
-        with ureq.urlopen("http://127.0.0.1:8000/v1/models", timeout=2) as r:
+        with ureq.urlopen(MODELS_URL, timeout=2) as r:
             return r.status == 200
     except Exception:
         return False
 
+def server_pid():
+    """PID of whatever process is listening on the server port — works for any
+    OpenAI-compatible server, not just ds4. Used for live RSS/CPU."""
+    try:
+        out = subprocess.run(["lsof", "-ti", "tcp:%d" % SERVER_PORT, "-sTCP:LISTEN"],
+                             capture_output=True, text=True, timeout=3).stdout.split()
+        return int(out[0]) if out else None
+    except Exception:
+        return None
+
 def start_server():
+    """Start the model server from the UI. Reads server.cmd/server.cwd from config.json
+    (any OpenAI-compatible server); falls back to a ds4 checkout if one is present."""
     if server_up(): return {"ok": True, "already": True}
-    if not os.path.exists(os.path.join(DS4, "ds4-server")):
-        return {"ok": False, "error": "ds4-server not found in " + DS4 + " — set the DS4_DIR env var to your ds4 checkout"}
-    args = ["./ds4-server", "--ssd-streaming", "--ssd-streaming-cache-experts", "40GB",
-            "--ctx", "8192", "--port", "8000"]
+    sc = load_config().get("server") or {}
+    cmd, cwd, shell = sc.get("cmd"), sc.get("cwd") or HERE, False
+    if not cmd:
+        if os.path.exists(os.path.join(DS4, "ds4-server")):   # ds4 dev fallback
+            cmd = ["./ds4-server", "--ssd-streaming", "--ssd-streaming-cache-experts", "40GB",
+                   "--ctx", "8192", "--port", str(SERVER_PORT)]
+            cwd = DS4
+        else:
+            return {"ok": False, "error": "no start command configured — start your OpenAI-compatible "
+                    "server manually, or set \"server\": {\"cmd\": [...]} in config.json (or DS4_DIR for ds4)."}
+    if isinstance(cmd, str): shell = True
     log = open(os.path.join(RESULTS, "server.log"), "a")
-    PROC["server"] = subprocess.Popen(args, cwd=DS4, stdout=log, stderr=log, start_new_session=True)
+    try:
+        PROC["server"] = subprocess.Popen(cmd, cwd=cwd, stdout=log, stderr=log, start_new_session=True, shell=shell)
+    except Exception as e:
+        return {"ok": False, "error": "could not start server: %s" % e}
     return {"ok": True, "starting": True}
 
 def start_eval(p):
     if read_live().get("running"): return {"ok": False, "error": "a run is already in progress"}
-    if not server_up(): return {"ok": False, "error": "model server not reachable on :8000 — start it first"}
-    bench = re.sub(r"[^A-Za-z0-9_.-]", "", str(p.get("benchmark", "medqa_test")))
+    if not server_up(): return {"ok": False, "error": "model server not reachable on :%d — start it first" % SERVER_PORT}
+    bench = re.sub(r"[^A-Za-z0-9_.-]", "", str(p.get("benchmark", "")))
     path = os.path.join(DATA, bench + ".jsonl")
-    if not os.path.exists(path): return {"ok": False, "error": "benchmark not found: " + bench}
+    if not bench or not os.path.exists(path): return {"ok": False, "error": "benchmark not found: " + (bench or "(none)")}
     try: n = max(1, int(p.get("n", 25)))
     except Exception: n = 25
     mode = "think" if p.get("mode") == "thinking" else "nothink"
-    tag = (re.sub(r"[^A-Za-z0-9_.-]", "", str(p.get("tag", "iq2"))) or "iq2")[:40]
+    tag = (re.sub(r"[^A-Za-z0-9_.-]", "", str(p.get("tag", "run"))) or "run")[:40]
     if bench == "healthbench_hard":
-        # rubric-graded, not MCQ — needs the HealthBench runner (OpenAI grader via .apikey)
+        # rubric-graded, not MCQ — needs the HealthBench runner (grader via .apikey)
         args = [sys.executable, os.path.join(HERE, "healthbench.py"), str(n), tag, mode, "hard"]
+    elif bench_kind(path) == "code":
+        # code-generation tasks — generate, then EXECUTE against tests (pass@1)
+        args = [sys.executable, os.path.join(HERE, "eval_code.py"), path, str(n), mode, tag]
     else:
         args = [sys.executable, os.path.join(HERE, "eval_mcq.py"), path, str(n), mode, tag]
     log = open(os.path.join(RESULTS, "eval.log"), "a")
@@ -190,6 +288,19 @@ def stop_eval():
         except Exception: pass
         return {"ok": True, "stopped": True}
     return {"ok": True, "stopped": False}
+
+def fetch_benchmarks_async(keys):
+    """Download one or more registry benchmarks into data/ via fetch_benchmarks.py (detached)."""
+    if FB is None: return {"ok": False, "error": "fetch_benchmarks.py not importable"}
+    valid = [k for k in keys if k in FB.REGISTRY]
+    if not valid: return {"ok": False, "error": "no known benchmark keys in request"}
+    if PROC.get("fetch") and PROC["fetch"].poll() is None:
+        return {"ok": False, "error": "a fetch is already running"}
+    os.makedirs(RESULTS, exist_ok=True)
+    log = open(os.path.join(RESULTS, "fetch.log"), "w")
+    PROC["fetch"] = subprocess.Popen([sys.executable, os.path.join(HERE, "fetch_benchmarks.py")] + valid,
+                                     cwd=HERE, stdout=log, stderr=log, start_new_session=True)
+    return {"ok": True, "fetching": valid}
 
 def stop_all():
     """Forcefully stop ALL eval/chain processes — even those launched outside the dashboard."""
@@ -209,14 +320,15 @@ def stop_all():
     return {"ok": True, "killed": killed}
 
 def kill_server():
+    pid = server_pid()
     try:
-        subprocess.run(["pkill", "-9", "-f", "ds4-server"], capture_output=True)
-        return {"ok": True, "killed": "ds4-server"}
+        if pid:
+            subprocess.run(["kill", "-9", str(pid)], capture_output=True)
+            return {"ok": True, "killed": pid}
+        subprocess.run(["pkill", "-9", "-f", "ds4-server"], capture_output=True)   # ds4 dev fallback
+        return {"ok": True, "killed": "server"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
-
-OPTS = {"medqa_test": 4, "medmcqa": 4, "mmlu_medical": 4, "pubmedqa": 3, "medxpertqa": 10}
-PRIMARY_REF = "MedGemma-27B (TTS)"   # closest apples-to-apples external baseline
 
 def wilson(k, n, z=1.96):
     """Wilson score 95% CI for a proportion; returns (lo%, hi%)."""
@@ -234,15 +346,25 @@ def _chi2_uniform(dist, opts):
     exp = tot / opts
     return (round(sum((c-exp)**2/exp for c in cells), 2), opts-1, tot)
 
+def is_rubric(b):
+    """Rubric-graded (open-ended) benchmarks score a 0-100 rubric mean, not k/n correct,
+    so they get no binomial CI / letter-bias and are excluded from the MCQ macro-average."""
+    return bool(b) and b.startswith("healthbench")
+
 def summary():
-    """Server-side stats over runs.jsonl x references: Wilson CIs, gaps, macro-avg, bias."""
-    runs = read_jsonl(RUNS); refs_all = META["references"]
+    """Server-side stats over runs.jsonl x optional reference baselines: Wilson CIs,
+    gaps, macro-avg, answer-bias. References & option counts come from config.json."""
+    cfg = load_config()
+    refs_all = merged_references(cfg)
+    opts_map = cfg.get("options") or {}
+    primary_label = cfg.get("primary_ref")
+    runs = read_jsonl(RUNS)
     benches = sorted({r.get("benchmark") for r in runs if r.get("benchmark")} | set(refs_all.keys()))
     per_run, bias = [], []
     for r in runs:
         b = r.get("benchmark"); n = r.get("n") or 0; acc = r.get("accuracy")
         if acc is None or not b: continue
-        if b == "healthbench_hard":
+        if is_rubric(b):
             lo = hi = None   # rubric mean, not k/n successes — a binomial Wilson CI is invalid here
         else:
             k = r.get("correct");  k = round(acc/100.0*n) if k is None else k
@@ -251,7 +373,8 @@ def summary():
                         "n": n, "accuracy": acc, "ci_lo": lo, "ci_hi": hi, "small_n": n < 50})
         ld = r.get("letter_dist")
         if ld:
-            chi2, dof, tot = _chi2_uniform(ld, OPTS.get(b, 4))
+            n_opts = r.get("n_options") or opts_map.get(b) or len([k for k in ld if ld[k]]) or 4
+            chi2, dof, tot = _chi2_uniform(ld, n_opts)
             sev = "high" if chi2 > 2*dof else "some" if chi2 > dof else "ok"
             bias.append({"ts": r.get("ts"), "benchmark": b, "mode": r.get("mode"), "dist": ld,
                          "chi2": chi2, "dof": dof, "n": tot, "severity": sev})
@@ -263,7 +386,10 @@ def summary():
         th, no = best("thinking"), best("nothink")
         best_ours = th or no
         refs = refs_all.get(b, [])
-        primary = next((x for x in refs if x["label"] == PRIMARY_REF), None)
+        non_chance = [x for x in refs if x.get("kind") != "chance"]
+        primary = next((x for x in refs if x.get("label") == primary_label), None) if primary_label else None
+        if not primary and non_chance:
+            primary = max(non_chance, key=lambda x: x["accuracy"])   # default: strongest baseline
         best_ref = max(refs, key=lambda x: x["accuracy"]) if refs else None
         cell = {"thinking": th, "nothink": no, "best": best_ours,
                 "refs": refs, "primary_ref": primary, "best_ref": best_ref}
@@ -273,16 +399,16 @@ def summary():
                 cell["ref_in_ci"] = best_ours["ci_lo"] <= primary["accuracy"] <= best_ours["ci_hi"]
         if th and no: cell["think_delta"] = round(th["accuracy"] - no["accuracy"], 1)
         by[b] = cell
-    # macro-avg: exclude healthbench_hard (rubric score, not % accuracy) and use ONE consistent
-    # build tag per mode (the widest-coverage tag) so different builds are never blended.
+    # macro-avg: exclude rubric benchmarks (not % accuracy) and use ONE consistent tag per
+    # mode (the widest-coverage tag) so different builds/configs are never blended.
     def macro_for(mode):
         cov = collections.Counter(x["tag"] for x in per_run
-                                  if x["mode"] == mode and x["benchmark"] != "healthbench_hard")
+                                  if x["mode"] == mode and not is_rubric(x["benchmark"]))
         if not cov: return None, 0, None
         tag = cov.most_common(1)[0][0]
         accs = []
         for b in benches:
-            if b == "healthbench_hard": continue
+            if is_rubric(b): continue
             cands = [x for x in per_run if x["benchmark"] == b and x["mode"] == mode and x["tag"] == tag]
             if cands: accs.append(max(cands, key=lambda x: x["n"])["accuracy"])
         return (round(sum(accs)/len(accs), 1) if accs else None, len(accs), tag)
@@ -291,16 +417,12 @@ def summary():
     macro = {"thinking_mean": tm_mean, "thinking_k": tm_k, "thinking_tag": tm_tag,
              "nothink_mean": nm_mean, "nothink_k": nm_k, "nothink_tag": nm_tag}
     return {"benchmarks": benches, "per_run": per_run, "by_benchmark": by,
-            "macro": macro, "bias": bias, "primary_ref": PRIMARY_REF, "opts": OPTS}
+            "macro": macro, "bias": bias, "primary_ref": primary_label, "opts": opts_map}
 
 def sysmetrics():
     """Live system + model-server metrics: server RSS, CPU, system memory, decode t/s."""
     m = {"server_up": server_up()}
-    pid = None
-    try:
-        o = subprocess.run(["pgrep", "-f", "ds4-server"], capture_output=True, text=True, timeout=3).stdout.split()
-        pid = int(o[0]) if o else None
-    except Exception: pass
+    pid = server_pid()
     m["pid"] = pid
     if pid:
         try:
@@ -386,7 +508,7 @@ def activity():
 
 def read_log_tail(which, n=300):
     """Tail of a results log file (server|eval) — for the in-UI debug drawer."""
-    fn = {"server": "server.log", "eval": "eval.log"}.get(which, "server.log")
+    fn = {"server": "server.log", "eval": "eval.log", "fetch": "fetch.log"}.get(which, "server.log")
     fp = os.path.join(RESULTS, fn)
     if not os.path.exists(fp): return {"file": fn, "text": "(no log yet)"}
     try:
@@ -422,6 +544,8 @@ def _sample_metrics():
     while True:
         try:
             m = sysmetrics(); a = activity(); sd = m.get("sys") or {}
+            if m.get("server_up") and not DETECTED.get("model"):   # learn the loaded model id once the server is up
+                DETECTED["model"] = detect_model()
             decoding = a.get("phase") in ("generating", "thinking")
             rec = {"t": round(time.time(), 1),
                    "rss": m.get("rss_gb"), "cpu": m.get("cpu"),
@@ -439,35 +563,38 @@ def _sample_metrics():
         time.sleep(2)
 
 def make_report():
+    meta = meta_payload(); cfg = load_config()
     runs = read_jsonl(RUNS); perf = read_jsonl(PERF)
-    L = ["# BeepMed Benchmark Report", "", f"_Generated {datetime.datetime.now().isoformat(timespec='seconds')}_", "",
+    refs_all = merged_references(cfg)
+    L = [f"# {meta['title']} — benchmark report", "",
+         f"_Generated {datetime.datetime.now().isoformat(timespec='seconds')}_", "",
          "## Environment", ""]
-    for k, v in META["env"].items(): L.append(f"- **{k}**: {v}")
-    L += ["", "## Accuracy — MedQA-USMLE", "", "| date | tag | mode | N | accuracy | s/q | notes |",
-          "|---|---|---|--:|--:|--:|---|"]
+    for k, v in meta["env"].items(): L.append(f"- **{k}**: {v}")
+    if not meta["env"]: L.append("_(model/host not detected — start the model server)_")
+    L += ["", "## Accuracy", "", "| date | benchmark | tag | mode | N | accuracy | s/q | notes |",
+          "|---|---|---|---|--:|--:|--:|---|"]
     for r in runs:
-        L.append(f"| {r.get('ts','')} | {r.get('tag','')} | {r.get('mode','')} | {r.get('n','')} "
+        L.append(f"| {r.get('ts','')} | {r.get('benchmark','')} | {r.get('tag','')} | {r.get('mode','')} | {r.get('n','')} "
                  f"| **{r.get('accuracy','')}%** | {r.get('sec_per_q','')} | {r.get('notes','') or ''} |")
-    L += ["", "### External reference baselines (per benchmark; different size/class)", ""]
-    for bench, refs in META["references"].items():
-        L += [f"**{bench}**", "", "| model | accuracy | source |", "|---|--:|---|"]
-        for ref in refs: L.append(f"| {ref['label']} | {ref['accuracy']}% | {ref['source']} |")
-        L.append("")
-    L += ["", "## Inference performance", "",
-          "| kind | config | prefetch | prefill t/s | gen t/s | hit-rate | notes |", "|---|---|---|--:|--:|--:|---|"]
-    for p in perf:
-        hr = p.get('hit_rate'); hr = f"{hr:.3f}" if isinstance(hr, (int, float)) else "—"
-        L.append(f"| {p.get('kind','')} | {p.get('config','')} | {p.get('prefetch','')} | {p.get('prefill_tps','')} "
-                 f"| **{p.get('gen_tps','')}** | {hr} | {p.get('notes','') or ''} |")
-    c = META["correctness"]
-    L += ["", "## Correctness", "", f"- {c['test']} → **{c['result']}** ({c['runs']} runs, {c['cases']} cases): {c['detail']}",
-          "", "## RAM", "", f"- 81 GB model runs in **~{META['ram']['footprint_gb']} GB RAM** "
-          f"({META['ram']['cache_gb']} GB cache = {META['ram']['experts']} experts; rest streamed)",
-          "", "_Caveats: small-N runs have wide CIs; non-thinking has letter bias; t/s ±~10%. See README.md._"]
+    if refs_all:
+        L += ["", "### Reference baselines (external; different size/class)", ""]
+        for bench, refs in refs_all.items():
+            L += [f"**{bench}**", "", "| model | accuracy | source |", "|---|--:|---|"]
+            for ref in refs: L.append(f"| {ref.get('label','')} | {ref.get('accuracy','')}% | {ref.get('source','')} |")
+            L.append("")
+    if perf:
+        L += ["", "## Inference performance", "",
+              "| kind | config | prefetch | prefill t/s | gen t/s | hit-rate | notes |", "|---|---|---|--:|--:|--:|---|"]
+        for p in perf:
+            hr = p.get('hit_rate'); hr = f"{hr:.3f}" if isinstance(hr, (int, float)) else "—"
+            L.append(f"| {p.get('kind','')} | {p.get('config','')} | {p.get('prefetch','')} | {p.get('prefill_tps','')} "
+                     f"| **{p.get('gen_tps','')}** | {hr} | {p.get('notes','') or ''} |")
+    L += ["", "_Caveats: small-N runs have wide Wilson CIs; non-thinking can show letter bias; "
+          "decode t/s ±~10%. See README.md._"]
     return "\n".join(L)
 
 PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>BeepMed · Benchmark Explorer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>benchy · Benchmark Explorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -597,8 +724,14 @@ canvas{max-height:280px}
 .toast{background:#16161a;border:1px solid var(--bd2);color:var(--ink);padding:9px 15px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;transform:translateY(10px);transition:.28s}
 .toast.in{opacity:1;transform:none}.toast.bad{border-color:rgba(255,77,79,.5);color:#ff9b9d}
 /* modal */
-#detModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(4px);z-index:100;padding:40px 20px;overflow:auto}
-#detModal .box{max-width:960px;margin:0 auto;background:#0d0d0f;border:1px solid #262629;border-radius:16px;padding:20px 22px}
+#detModal,#setupModal,#benchModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(4px);z-index:100;padding:40px 20px;overflow:auto}
+#detModal .box,#setupModal .box,#benchModal .box{max-width:960px;margin:0 auto;background:#0d0d0f;border:1px solid #262629;border-radius:16px;padding:20px 22px}
+.benchrow{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 10px;border:1px solid var(--bd);border-radius:9px;margin:6px 0;background:#0a0a0c}
+.benchrow .bn{font-weight:600}.benchrow .br{margin-left:auto;display:flex;align-items:center;gap:8px}
+.benchrow .dom{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut2)}
+#refList .refrow{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:6px 9px;border:1px solid var(--bd);border-radius:8px;margin:5px 0;background:#0a0a0c}
+#refList .refrow .rm{margin-left:auto;cursor:pointer;color:var(--mut2);border:0;background:none;font-size:14px}#refList .refrow .rm:hover{color:var(--dang)}
+#refList .refbench{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:12px 0 2px}
 .dtoolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:10px 0 14px}
 /* debug drawer */
 .dbgbtn{position:fixed;right:18px;bottom:18px;z-index:90;background:#121214;border:1px solid var(--bd2);color:var(--mut);border-radius:10px;padding:9px 13px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);transition:.15s}
@@ -622,7 +755,10 @@ canvas{max-height:280px}
 .livegrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.06fr);gap:14px;align-items:start}
 @media(max-width:860px){.livegrid{grid-template-columns:1fr}}
 .livestack{display:flex;flex-direction:column;gap:14px}
-.sysbig{font-size:19px;font-weight:800;letter-spacing:-.02em}
+.sysbig{font-size:16px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}
+.syschart{position:relative;height:120px;margin-top:8px}.syschart canvas{position:absolute;inset:0}
+.syslegend{display:flex;gap:13px;font-size:10.5px;color:var(--mut2);margin-top:6px;flex-wrap:wrap}
+.syslegend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
 .qrow .qtime{font-size:11px;color:var(--mut2);margin-top:7px}
 .qrow .qh{cursor:pointer}
 .blink{animation:blinkv 1.25s ease-in-out infinite}@keyframes blinkv{0%,100%{opacity:1}50%{opacity:.38}}
@@ -681,10 +817,10 @@ canvas{max-height:280px}
 <div class="aurora"><i></i><i></i><i></i></div>
 <div class="wrap">
 <div class="hl"><div>
-  <h1>BeepMed · DeepSeek-V4-Flash IQ2</h1>
-  <p class="sub">Medical-eval lab — each <b>experiment</b> (a quant / imatrix build) is run across medical benchmarks on one local rig.</p>
+  <h1 id="pageTitle">benchy</h1>
+  <p class="sub" id="pageSub">Local LLM benchmark suite — each <b>run</b> (a model / quant / build) is scored across a panel of benchmarks on your own machine.</p>
 </div>
-<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn g" onclick="loadAll();pulse()">↻ Refresh</button><button class="btn g" onclick="copyReport(this)">⧉ Copy report</button><button class="btn" onclick="location.href='/api/report'">⬇ Export</button></div></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn g" onclick="openBenchmarks()">⬇ Benchmarks</button><button class="btn g" onclick="openSetup()">⚙ Setup</button><button class="btn g" onclick="loadAll();pulse()">↻ Refresh</button><button class="btn g" onclick="copyReport(this)">⧉ Copy report</button><button class="btn" onclick="location.href='/api/report'">⬇ Export</button></div></div>
 <div class="envstrip" id="envstrip"></div>
 
 <!-- EXPERIMENT -->
@@ -692,22 +828,23 @@ canvas{max-height:280px}
 
 <!-- CONTROL -->
 <div class="sec" id="control"><div class="grid g2">
-  <div class="card"><h3>Model server (:8000)</h3>
+  <div class="card"><h3>Model server</h3>
     <div class="toolbar" style="margin:11px 0 0"><span class="tag" id="srvPill">checking…</span>
       <button class="btn g" id="srvBtn" onclick="startServer()">Start server</button>
       <button class="btn dang" onclick="stopAll()">⛔ Stop all tests</button>
       <button class="btn g" onclick="killServer()" title="force-kill the model server">kill server</button>
       <span class="muted" id="srvMsg" style="font-size:12px"></span></div>
-    <p class="muted" style="font-size:12px;margin:11px 0 0;line-height:1.55">Active build: <b style="color:var(--pur2)">iq2-medimatrix</b> (medical-recalibrated imatrix). Tag your runs so they compare against <code class="mono">iq2-baseline</code> in Accuracy — specs in the strip up top.</p></div>
+    <p class="muted" style="font-size:12px;margin:11px 0 0;line-height:1.55">Tag each run (e.g. a model, quant, or build name) so runs compare against your <b id="baselineTagTxt" style="color:var(--pur2)">baseline</b> tag in Accuracy. Add optional reference baselines in <a href="#" onclick="openSetup();return false">Setup</a>.</p></div>
   <div class="card"><h3>Run a test</h3>
     <div class="toolbar" style="margin:11px 0 0">
-      <select id="rBench" onchange="rBenchUser=true"></select>
+      <select id="rBench" onchange="rBenchUser=true;updateRunDesc();syncAccToRun()"></select>
       <input id="rN" type="number" value="25" min="1" style="width:78px" title="N questions">
       <div class="seg"><button id="segT" class="on" onclick="setMode('thinking')">🧠 thinking</button><button id="segN" onclick="setMode('nothink')">⚡ nothink</button></div>
-      <input id="rTag" type="text" value="iq2-medimatrix" style="width:150px" placeholder="version tag">
+      <input id="rTag" type="text" value="" style="width:150px" placeholder="run tag (e.g. baseline)">
       <button class="btn" id="runBtn" onclick="runTest()">▶ Run</button>
       <button class="btn g" id="stopBtn" onclick="stopTest()" style="display:none">■ Stop</button>
-      <span class="muted" id="runMsg" style="font-size:12px"></span></div></div>
+      <span class="muted" id="runMsg" style="font-size:12px"></span></div>
+    <p class="muted" id="runDesc" style="font-size:12px;margin:9px 0 0;min-height:16px;line-height:1.5"></p></div>
 </div></div>
 
 <!-- LIVE -->
@@ -743,33 +880,29 @@ canvas{max-height:280px}
 <!-- SYSTEM -->
 <div class="sec" id="system"><h2>System resources <span class="hint">live · sampled every 2s · history kept server-side (full on refresh)</span></h2>
   <div class="grid g3">
-    <div class="card"><div class="ch"><h3>Decode throughput</h3><span class="sysbig" id="sysTps" style="color:var(--warn)">—</span></div><canvas id="sysTpsChart" height="116"></canvas></div>
-    <div class="card"><div class="ch"><h3>Memory <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· server RSS / system</span></h3><span class="sysbig" id="sysRam" style="color:var(--acc2)">—</span></div><canvas id="sysRamChart" height="116"></canvas></div>
-    <div class="card"><div class="ch"><h3>Server CPU</h3><span class="sysbig" id="sysCpu" style="color:var(--ok)">—</span></div><canvas id="sysCpuChart" height="116"></canvas></div>
+    <div class="card"><div class="ch"><h3>Decode throughput</h3><span class="sysbig" id="sysTps" style="color:var(--warn)">—</span></div><div class="syschart"><canvas id="sysTpsChart"></canvas></div></div>
+    <div class="card"><div class="ch"><h3>Memory <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· model / system</span></h3><span class="sysbig" id="sysRam" style="color:var(--acc2)">—</span></div>
+      <div class="syslegend" id="sysMemLeg"></div>
+      <div class="syschart"><canvas id="sysRamChart"></canvas></div></div>
+    <div class="card"><div class="ch"><h3>Server CPU</h3><span class="sysbig" id="sysCpu" style="color:var(--ok)">—</span></div><div class="syschart"><canvas id="sysCpuChart"></canvas></div></div>
   </div></div>
 
 <!-- ACCURACY -->
-<div class="sec" id="accuracy"><h2>Medical accuracy <select id="accBench" onchange="accBenchUser=true;accbars()" style="margin-left:6px;font-size:13px"></select><span class="hint" id="macroHint"></span></h2>
+<div class="sec" id="accuracy"><h2>Accuracy <select id="accBench" onchange="accBenchUser=true;accbars()" style="margin-left:6px;font-size:13px"></select><span class="hint" id="macroHint"></span></h2>
+  <p class="muted" id="accDesc" style="font-size:12px;margin:-4px 0 12px;line-height:1.5"></p>
   <div class="grid g2">
-    <div class="card"><h3>Our runs vs reference baselines <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· 95% Wilson CI shown on our bars</span></h3><div id="accbars" style="margin-top:12px"></div>
-      <p class="muted" style="font-size:12px;margin:11px 0 0;line-height:1.5">⚠ Frontier on MedQA is <b style="color:var(--warn)">saturated (~95–96% in 2026)</b> — newest models report HealthBench / Medmarks, not MCQ. Our thinking run already sits in this top band; small-N CIs are wide, read them.</p></div>
+    <div class="card"><h3>Your runs<span id="refLbl"></span> <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· 95% Wilson CI shown on your bars</span></h3><div id="accbars" style="margin-top:12px"></div>
+      <p class="muted" id="accNote" style="font-size:12px;margin:11px 0 0;line-height:1.5">Frontier baselines are <b>published numbers</b> (eval-setup-dependent — for context, not size-matched). Small-N runs have wide CIs; treat overlapping CIs as indistinguishable. Edit/add baselines in <a href="#" onclick="openSetup();return false">Setup</a>.</p></div>
     <div class="card"><h3>Thinking vs non-thinking</h3><canvas id="modeChart"></canvas></div>
   </div></div>
 
-<!-- PERFORMANCE -->
-<div class="sec" id="performance"><h2>Inference performance</h2>
-  <div class="callout" style="margin-bottom:14px">Decode on 64 GB is <b>bandwidth-bound</b>: speed scales with the <b>cache hit-rate</b> — how much of the model is resident in RAM. The curve below maps footprint → speed (the model's real operational size).</div>
-  <div class="card"><h3>Cache size → hit-rate &amp; decode speed <span class="muted" style="font-weight:500;font-size:12px;text-transform:none;letter-spacing:0">· operational size</span></h3><canvas id="hrChart"></canvas></div>
-  <div class="card" style="margin-top:14px"><h3>All performance runs</h3>
-    <table><thead><tr><th>kind</th><th>config</th><th class="n">prefill t/s</th><th class="n">gen t/s</th><th class="n">hit-rate</th><th>notes</th></tr></thead><tbody id="perfBody"></tbody></table></div></div>
-
 <!-- RUNS -->
-<div class="sec" id="runs"><h2>Runs explorer <span class="hint">click an accuracy run to inspect every question</span></h2>
-  <div class="toolbar" style="margin-bottom:12px"><div class="seg"><button id="vAcc" class="on" onclick="setView('acc')">Accuracy</button><button id="vPerf" onclick="setView('perf')">Performance</button></div>
-    <input type="search" id="q" placeholder="filter…" oninput="renderRuns()"><span class="muted" id="runcount" style="margin-left:auto"></span></div>
+<div class="sec" id="runs"><h2>Runs explorer <span class="hint">click a run to inspect every question</span></h2>
+  <div class="toolbar" style="margin-bottom:12px">
+    <input type="search" id="q" placeholder="filter runs…" oninput="renderRuns()" style="min-width:200px"><span class="muted" id="runcount" style="margin-left:auto"></span></div>
   <div class="card" style="padding:0;overflow:hidden"><table><thead id="runHead"></thead><tbody id="runBody"></tbody></table></div></div>
 
-<div class="foot">Live stream, accuracy &amp; LLM activity update ~1.5s · tables 6s · live metrics &amp; benchmark numbers come from <span class="mono">results/</span> &amp; <span class="mono">server.log</span>; the Environment panel shows static spec/reference values, not live readings.<br>Methodology &amp; caveats in README.md — small-N Wilson CIs, page-cache/thermal noise, non-thinking letter bias, t/s ±~10%. HealthBench is a rubric score (not % correct), small-N, partly multilingual.</div>
+<div class="foot">Live stream, accuracy &amp; LLM activity update ~1.5s · tables 6s · live metrics &amp; benchmark numbers come from <span class="mono">results/</span> &amp; <span class="mono">server.log</span>; the model id &amp; host specs are auto-detected, reference baselines come from your <span class="mono">config.json</span> (Setup).<br>Methodology &amp; caveats in README.md — small-N Wilson CIs, page-cache/thermal noise, non-thinking letter bias, decode t/s ±~10%. Rubric-graded benchmarks (e.g. HealthBench) score 0–100, not % correct, and are excluded from the MCQ macro-average.</div>
 </div>
 
 <div id="detModal" onclick="if(event.target===this)closeDetails()"><div class="box">
@@ -781,9 +914,42 @@ canvas{max-height:280px}
   <div id="detBody"></div>
 </div></div>
 
+<div id="setupModal" onclick="if(event.target===this)closeSetup()"><div class="box" style="max-width:680px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">⚙ Setup</h2>
+    <button class="btn g" onclick="closeSetup()">✕ Close</button></div>
+  <p class="muted" style="font-size:12.5px;margin:6px 0 14px;line-height:1.5">All optional. Model id and host specs are auto-detected from your running server and OS — nothing here is required to run benchmarks. Saved to a git-ignored <code class="mono">config.json</code>.</p>
+
+  <h3 style="font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 8px">Auto-detected</h3>
+  <div class="chips" id="setupDetected" style="margin-bottom:18px"></div>
+
+  <h3 style="font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 8px">Display</h3>
+  <div class="toolbar" style="margin-bottom:6px"><label class="muted" style="font-size:12px;width:96px">Title</label><input id="setTitle" type="text" placeholder="benchy" style="flex:1"></div>
+  <div class="toolbar" style="margin-bottom:18px"><label class="muted" style="font-size:12px;width:96px">Baseline tag</label><input id="setBaseline" type="text" placeholder="baseline" style="flex:1" title="the run tag everything else is compared against in Accuracy"></div>
+
+  <h3 style="font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 4px">Reference baselines <span class="muted" style="text-transform:none;letter-spacing:0">· optional external scores to compare against, per benchmark</span></h3>
+  <div class="toolbar" style="margin:10px 0">
+    <select id="refBench" style="min-width:150px"></select>
+    <input id="refLabel" type="text" placeholder="model / source label" style="flex:1;min-width:140px">
+    <input id="refAcc" type="number" step="0.1" min="0" max="100" placeholder="score %" style="width:96px">
+    <select id="refKind" title="frontier = large general model · reference = comparable/specialized"><option value="ref">reference</option><option value="frontier">frontier</option><option value="chance">chance</option></select>
+    <button class="btn g" onclick="setupAddRef()">+ add</button></div>
+  <div id="refList" style="margin-bottom:16px"></div>
+
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn g" onclick="closeSetup()">Cancel</button><button class="btn" onclick="setupSave()">Save settings</button></div>
+</div></div>
+
+<div id="benchModal" onclick="if(event.target===this)closeBenchmarks()"><div class="box" style="max-width:680px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">⬇ Benchmarks</h2>
+    <div style="display:flex;gap:8px"><button class="btn" id="benchAll" onclick="fetchBench('__current__')">⬇ Fetch current set</button><button class="btn g" onclick="closeBenchmarks()">✕ Close</button></div></div>
+  <p class="muted" style="font-size:12.5px;margin:6px 0 14px;line-height:1.5">Download benchmarks into <code class="mono">data/</code>. <b>Current</b> = still discriminates mid-2026 models; <b>legacy</b> = saturated (small-model regression only). <b>Code</b> sets (HumanEval/MBPP) <b>generate &amp; execute code</b> for pass@1 — ⚠ runs model-written code locally (subprocess + timeout). Each set keeps its own license/source — see <code class="mono">DATA.md</code>.</p>
+  <div id="benchStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>
+  <div id="benchList"></div>
+  <div id="benchManual" style="margin-top:14px"></div>
+</div></div>
+
 <button class="chatbtn" onclick="chatToggle()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
 <div class="chatwrap" id="chatwrap"><div class="chat" id="chatpanel">
-  <div class="chathead"><div class="ttl">ds4 · chat <span class="ep">127.0.0.1:8000/v1</span></div>
+  <div class="chathead"><div class="ttl" id="chatTtl">chat <span class="ep" id="chatEp">/v1</span></div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <label class="ccontrols" title="chain-of-thought reasoning"><input type="checkbox" id="chatThink" style="width:auto"> 🧠 thinking</label>
       <button class="iconbtn" onclick="chatClear()" title="clear conversation">⌫ clear</button>
@@ -792,7 +958,7 @@ canvas{max-height:280px}
   <div class="chatmsgs" id="chatmsgs"></div>
   <div class="chatcompose">
     <div class="ccontrols"><span id="chatStatus">checking server…</span><span style="margin-left:auto" class="muted">Enter to send · Shift+Enter newline</span></div>
-    <div class="cinput"><textarea id="chatInput" rows="1" placeholder="Ask the model a medical question…" oninput="chatAutogrow(this)" onkeydown="chatKey(event)"></textarea><button class="csend" id="chatSend" onclick="chatSendOrStop()">↑</button></div></div>
+    <div class="cinput"><textarea id="chatInput" rows="1" placeholder="Ask the model something…" oninput="chatAutogrow(this)" onkeydown="chatKey(event)"></textarea><button class="csend" id="chatSend" onclick="chatSendOrStop()">↑</button></div></div>
 </div></div>
 
 <button class="dbgbtn" onclick="toggleDbg()">&lt;/&gt; debug</button>
@@ -807,7 +973,12 @@ let RUNS=[],PERF=[],META={},SUMMARY={},LIVE={},STREAM={},SYS={},ACT={},HISTM=[];
 let VIEW='acc',SORT={k:'ts',d:-1},RMODE='thinking',FEEDF='all',DETF='all',DET=[],DETFILE='',charts={},_sid=0,_dataSig='',_streamSig='',_sparkSig='',_expSig='',accBenchUser=false,rBenchUser=false;
 function setText(id,t){const e=$(id);if(e&&e.textContent!==t)e.textContent=t;}
 let DBG={open:false,tab:'timeline'};
-const NICE={medqa_test:'MedQA-USMLE',medmcqa:'MedMCQA',mmlu_medical:'MMLU Medical',pubmedqa:'PubMedQA',medxpertqa:'MedXpertQA',healthbench_hard:'HealthBench Hard'},nice=b=>NICE[b]||b;
+let REGMAP={};   // key -> {name,tier,fit,desc,domain} built from /api/benchmarks (registry + manual)
+const NICE={medqa_test:'MedQA-USMLE',medmcqa:'MedMCQA',mmlu_medical:'MMLU Medical',pubmedqa:'PubMedQA',medxpertqa:'MedXpertQA',healthbench_hard:'HealthBench Hard',mmlu_pro:'MMLU-Pro',supergpqa:'SuperGPQA',humaneval:'HumanEval',mbpp:'MBPP',gpqa:'GPQA',hle:'HLE'};
+function regName(b){return (REGMAP[b]&&REGMAP[b].name)||NICE[b]||b;}
+function regDesc(b){return (REGMAP[b]&&REGMAP[b].desc)||'';}
+function regTier(b){return (REGMAP[b]&&REGMAP[b].tier)||'other';}
+const nice=b=>regName(b);
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const num=v=>(v==null||v==='')?'—':v;
@@ -850,10 +1021,10 @@ function spark(vals,c,w,h){c=c||'#3291ff';w=w||120;h=h||26;const v=vals.filter(x
 /* ---------- discreet environment strip ---------- */
 function envStrip(){
   const el=$('envstrip');if(!el)return;
-  if(el.children.length||!Object.keys(META.env||{}).length)return;
-  const env=META.env||{},rm=META.ram||{};
-  const all=Object.assign({},env,{'Footprint (spec)':'~'+(rm.footprint_gb||'?')+' GB RAM · '+(rm.model_disk_gb||'?')+' GB disk · live RSS in System card'});
-  el.innerHTML=Object.entries(all).map(([k,v])=>`<span class="es" title="click to copy" onclick="copy('${esc(k)}: ${esc(v).replace(/'/g,'')}','${esc(k)} copied')"><b>${esc(k)}</b> ${esc(v)}</span>`).join('');
+  const env=META.env||{};el.dataset.sig=el.dataset.sig||'';
+  const sig=JSON.stringify(env);if(el.dataset.sig===sig)return;el.dataset.sig=sig;
+  if(!Object.keys(env).length){el.innerHTML='<span class="es muted">model &amp; host auto-detect when the server is up · live footprint in System</span>';return;}
+  el.innerHTML=Object.entries(env).map(([k,v])=>`<span class="es" title="click to copy" onclick="copy('${esc(k)}: ${esc(String(v)).replace(/'/g,'')}','${esc(k)} copied')"><b>${esc(k)}</b> ${esc(String(v))}</span>`).join('');
 }
 
 /* ---------- experiment band ---------- */
@@ -862,21 +1033,21 @@ function experimentBand(){
   const running=!!STREAM.running,lv=STREAM.live||{};
   const sorted=[...RUNS].sort((a,b)=>(a.ts>b.ts?1:(a.ts<b.ts?-1:0)));
   const activeTag=(running&&lv.tag)?lv.tag:(sorted.length?sorted[sorted.length-1].tag:'—');
-  const baseline='iq2-baseline';
+  const baseline=(META.baseline_tag||'baseline');
   const lastRun=sorted.length?sorted[sorted.length-1]:null;
-  const bench=(running&&lv.benchmark)?lv.benchmark:(lastRun?lastRun.benchmark:'medqa_test');
+  const bench=(running&&lv.benchmark)?lv.benchmark:(lastRun?lastRun.benchmark:'');
   const ourBest=RUNS.filter(r=>r.tag===activeTag&&r.benchmark===bench).sort((a,b)=>b.accuracy-a.accuracy)[0];
   const baseBest=RUNS.filter(r=>r.tag===baseline&&r.benchmark===bench).sort((a,b)=>b.accuracy-a.accuracy)[0];
-  const refs=(META.references||{})[bench]||[];const primaryRef=SUMMARY.primary_ref||'MedGemma-27B (TTS)';
-  let refPick=refs.find(r=>r.label===primaryRef);   // preferred apples-to-apples baseline if it exists for this benchmark
-  if(!refPick&&refs.length)refPick=refs.filter(r=>r.kind!=='chance').sort((a,b)=>b.accuracy-a.accuracy)[0]||refs[0];  // else best existing reference
+  const refs=(META.references||{})[bench]||[];const primaryRef=SUMMARY.primary_ref;
+  let refPick=primaryRef?refs.find(r=>r.label===primaryRef):null;   // configured primary baseline if it exists for this benchmark
+  if(!refPick&&refs.length)refPick=refs.filter(r=>r.kind!=='chance').sort((a,b)=>b.accuracy-a.accuracy)[0]||refs[0];  // else strongest existing reference
   const liveActive=running&&lv.benchmark===bench&&lv.accuracy!=null;   // currently recording this benchmark
   const ourAcc=liveActive?lv.accuracy:(ourBest?ourBest.accuracy:null);
   const delta=(ourAcc!=null&&baseBest)?+(ourAcc-baseBest.accuracy).toFixed(1):null;
   const sig=[running,activeTag,bench,lv.i,lv.accuracy,ourBest&&ourBest.accuracy,baseBest&&baseBest.accuracy,refPick&&refPick.label].join('|');
   if(sig===_expSig)return;_expSig=sig;
   const isBase=activeTag===baseline;
-  const desc=isBase?'General-imatrix 2-bit build — the control baseline every other build is measured against.':'Medical-recalibrated 2-bit imatrix — testing whether a medical importance matrix lifts accuracy vs the general-imatrix baseline, at the same footprint.';
+  const desc=isBase?('This is the baseline tag (<b>'+esc(baseline)+'</b>) — the reference every other run is measured against.'):('Comparing run <b>'+esc(activeTag)+'</b> against the baseline tag <b>'+esc(baseline)+'</b> on the same benchmark.');
   const status=running?'<span class="tag ok" style="display:inline-flex;align-items:center;gap:6px"><span class="dot"></span>running</span>':'<span class="tag">idle · last run</span>';
   const mc=(l,v,c,cls)=>`<div class="expmetric"><div class="expml">${l}</div><div class="expmv ${cls||''}" style="color:${c||'var(--ink)'}">${v}</div></div>`;
   const dV=delta==null?'—':(delta>=0?'+':'')+delta+' pts';
@@ -884,7 +1055,7 @@ function experimentBand(){
   const ourV=ourAcc!=null?(ourAcc+'%'+(liveActive?'<span class="livedot"></span>':'')):'—';
   const prog=running?`<div class="expprog"><div class="expbar"><i style="width:${lv.n?Math.round((lv.i||0)/lv.n*100):0}%"></i></div><span class="mono muted" style="font-size:12px;white-space:nowrap">${lv.i||0}/${lv.n||0} · ${esc(nice(lv.benchmark))} · ${esc(lv.mode||'')} · acc ${lv.accuracy!=null?lv.accuracy:'?'}%</span></div>`:'';
   el.innerHTML=`<div class="exphead"><div style="min-width:240px;flex:1">
-      <div class="expk">EXPERIMENT</div>
+      <div class="expk">CURRENT RUN</div>
       <div class="exptitle"><span class="tag pur">${esc(activeTag)}</span> ${status}</div>
       <p class="muted" style="margin:9px 0 0;font-size:12.5px;max-width:680px;line-height:1.55">${desc}</p></div>
     <div class="expmetrics">
@@ -895,30 +1066,50 @@ function experimentBand(){
     </div></div>${prog}`;
 }
 /* ---------- system resources ---------- */
-function sysOpts(unit,max){return {animation:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.y+' '+unit}}},scales:{y:{min:0,max:max,grid:{color:grid},ticks:{maxTicksLimit:4}},x:{display:false}}};}
+function sysOpts(unit,max){return {animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+(c.parsed.y==null?'—':c.parsed.y)+' '+unit}}},scales:{y:{min:0,max:max,grid:{color:grid},ticks:{maxTicksLimit:4}},x:{display:false}}};}
 function systemUI(){
   const h=(HISTM||[]).slice(-300);if(!h.length)return;
   const labels=h.map((_,i)=>i),last=h[h.length-1];
   const lastTps=[...h].reverse().find(r=>r.tps!=null);
   setText('sysTps',lastTps&&lastTps.tps!=null?lastTps.tps.toFixed(1)+' t/s':(last.up?'idle':'offline'));
-  chart('sysTpsChart',{type:'line',data:{labels,datasets:[{data:h.map(r=>r.tps),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:true}]},options:sysOpts('t/s')});
-  setText('sysRam',(last.rss!=null?'model '+last.rss+' GB':'—')+(last.used!=null?' · sys '+last.used+'/68.7':'')+(last.swap!=null&&last.swap>0?' · sys-swap '+last.swap+'G':''));
-  chart('sysRamChart',{type:'line',data:{labels,datasets:[{label:'model RSS',data:h.map(r=>r.rss),borderColor:'#3291ff',backgroundColor:'rgba(50,145,255,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:true},{label:'system used',data:h.map(r=>r.used),borderColor:'#8a63d2',tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true},{label:'system swap',data:h.map(r=>r.swap),borderColor:'#e5484d',backgroundColor:'rgba(229,72,77,.08)',tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true}]},options:sysOpts('GB',70)});
+  // decode: 0 when not decoding (so the line is anchored at the baseline, not floating gaps)
+  const tps=h.map(r=>r.up?(r.tps!=null?r.tps:0):null),tpsMax=Math.max(10,...tps.filter(x=>x!=null));
+  chart('sysTpsChart',{type:'line',data:{labels,datasets:[{data:tps,borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:false}]},options:sysOpts('t/s',Math.ceil(tpsMax*1.1))});
+  const memTot=(META.host&&META.host.mem_total_gb)||null;
+  setText('sysRam',last.rss!=null?last.rss+' GB':'—');   // big readout = model RSS only (short, never wraps)
+  const hasSwap=h.some(r=>r.swap!=null&&r.swap>0);
+  const leg=$('sysMemLeg');
+  if(leg){const ps=['<span><i style="background:#3291ff"></i>model '+(last.rss!=null?last.rss:'—')+' GB</span>',
+    '<span><i style="background:#8a63d2"></i>system '+(last.used!=null?last.used:'—')+(memTot?'/'+memTot:'')+' GB</span>'];
+    if(hasSwap)ps.push('<span><i style="background:#e5484d"></i>swap '+(last.swap!=null?last.swap:0)+' GB</span>');
+    leg.innerHTML=ps.join('');}
+  const memDs=[{label:'model RSS',data:h.map(r=>r.rss),borderColor:'#3291ff',backgroundColor:'rgba(50,145,255,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:true},
+    {label:'system used',data:h.map(r=>r.used),borderColor:'#8a63d2',tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true}];
+  if(hasSwap)memDs.push({label:'swap',data:h.map(r=>r.swap),borderColor:'#e5484d',backgroundColor:'rgba(229,72,77,.08)',tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true});
+  chart('sysRamChart',{type:'line',data:{labels,datasets:memDs},options:sysOpts('GB',memTot?Math.ceil(memTot*1.05):null)});
   setText('sysCpu',last.cpu!=null?Math.round(last.cpu)+'%':'—');
-  chart('sysCpuChart',{type:'line',data:{labels,datasets:[{data:h.map(r=>r.cpu),borderColor:'#0cce6b',backgroundColor:'rgba(12,206,107,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:true}]},options:sysOpts('%')});
+  const cpu=h.map(r=>r.up?(r.cpu!=null?r.cpu:0):null),cpuMax=Math.max(100,...cpu.filter(x=>x!=null));
+  chart('sysCpuChart',{type:'line',data:{labels,datasets:[{data:cpu,borderColor:'#0cce6b',backgroundColor:'rgba(12,206,107,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:false}]},options:sysOpts('%',Math.ceil(cpuMax/10)*10)});
 }
 /* ---------- accuracy ---------- */
 function accbars(){
-  const bench=($('accBench')&&$('accBench').value)||'medqa_test';
+  const bench=($('accBench')&&$('accBench').value)||'';
+  const installed=(META.benchmarks||[]).includes(bench);
   const ours=(SUMMARY.per_run||[]).filter(r=>r.benchmark===bench).map(r=>({label:r.tag+' · '+r.mode+' (N='+r.n+')',acc:r.accuracy,lo:r.ci_lo,hi:r.ci_hi,small:r.small_n,cls:'ours'}));
   const refs=((META.references||{})[bench]||[]).map(r=>({label:r.label,acc:r.accuracy,cls:r.kind||'ref'}));
   const all=ours.concat(refs).sort((a,b)=>b.acc-a.acc);
-  const CLS={ours:['linear-gradient(90deg,#0070f3,#3291ff)','Our IQ2'],frontier:['#a855f7','Frontier'],ref:['#14b8a6','Medical-spec.'],chance:['#3a3a3a','Chance']};
-  const legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 14px;font-size:12px;color:#9a9aa2">'+['ours','frontier','ref','chance'].map(k=>`<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:11px;height:11px;border-radius:3px;display:inline-block;background:${CLS[k][0]}"></i>${CLS[k][1]}</span>`).join('')+'</div>';
+  const refLbl=$('refLbl');if(refLbl)refLbl.textContent=refs.length?' vs reference baselines':'';
+  const ad=$('accDesc');if(ad)ad.textContent=regDesc(bench)||'';
+  const CLS={ours:['linear-gradient(90deg,#0070f3,#3291ff)','Your runs'],frontier:['#a855f7','Frontier'],ref:['#14b8a6','Reference'],chance:['#3a3a3a','Chance']};
+  const present=[...new Set(all.map(x=>x.cls))];
+  const legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 14px;font-size:12px;color:#9a9aa2">'+['ours','frontier','ref','chance'].filter(k=>present.includes(k)).map(k=>`<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:11px;height:11px;border-radius:3px;display:inline-block;background:${CLS[k][0]}"></i>${CLS[k][1]}</span>`).join('')+'</div>';
   $('accbars').innerHTML=all.length?(legend+all.map(x=>{const s=CLS[x.cls]||CLS.ref;const lbl=x.cls==='ours'?`<b>${esc(x.label)}</b>`:esc(x.label);
     const ci=(x.cls==='ours'&&x.lo!=null)?`<div class="ci" style="left:${x.lo}%;width:${Math.max(0,x.hi-x.lo)}%"></div>`:'';
     const pv=(x.cls==='ours'&&x.lo!=null)?`${x.acc}% <small>[${x.lo}–${x.hi}]${x.small?' ⚠':''}</small>`:`${x.acc}%`;
-    return `<div class="barwrap"><div class="lab" title="${esc(x.label)}">${lbl}</div><div class="track"><div class="fill" style="width:${Math.max(2,x.acc)}%;background:${s[0]}"></div>${ci}</div><div class="pv mono">${pv}</div></div>`}).join('')):('<div class="muted">No runs for '+nice(bench)+' yet — launch one from Control.</div>');
+    return `<div class="barwrap"><div class="lab" title="${esc(x.label)}">${lbl}</div><div class="track"><div class="fill" style="width:${Math.max(2,x.acc)}%;background:${s[0]}"></div>${ci}</div><div class="pv mono">${pv}</div></div>`}).join('')):('<div class="muted">No data for '+(nice(bench)||'this benchmark')+' yet — '+(installed?'launch a run from <b>Run a test</b> above.':'<a href="#" onclick="openBenchmarks();return false">fetch it from ⬇ Benchmarks</a> first.')+'</div>');
+  // coherence: tell the user when the selected benchmark has baselines but isn't installed to run
+  const note=$('accNote');
+  if(note)note.innerHTML=((bench&&!installed&&refs.length)?'⚠ <b>'+esc(nice(bench))+'</b> isn\'t installed — <a href="#" onclick="openBenchmarks();return false">fetch it from ⬇ Benchmarks</a> to score your model against these baselines. ':'')+'Frontier baselines are <b>published numbers</b> (eval-setup-dependent — for context, not size-matched). Edit/add in <a href="#" onclick="openSetup();return false">Setup</a>.';
   // mode chart from raw runs
   const runs=RUNS.filter(r=>r.benchmark===bench);
   const byMode={};runs.forEach(r=>{(byMode[r.mode]=byMode[r.mode]||[]).push(r.accuracy)});
@@ -929,36 +1120,24 @@ function accbars(){
 }
 
 /* ---------- performance ---------- */
-function perfCharts(){
-  const pts=PERF.filter(p=>p.hit_rate!=null).sort((a,b)=>a.cache_gb-b.cache_gb);
-  const labels=[...new Set(pts.map(p=>p.cache_gb+' GB'))];
-  const hr=labels.map(l=>{const g=parseInt(l),r=pts.find(p=>p.cache_gb===g);return r?r.hit_rate*100:null});
-  const gt=labels.map(l=>{const g=parseInt(l),r=pts.find(p=>p.cache_gb===g);return r?r.gen_tps:null});
-  chart('hrChart',{type:'line',data:{labels,datasets:[{label:'hit-rate %',data:hr,borderColor:'#0cce6b',backgroundColor:'rgba(12,206,107,.1)',tension:.3,yAxisID:'y',fill:true,pointRadius:4},{label:'gen tok/s',data:gt,borderColor:'#f5a623',tension:.3,yAxisID:'y1',pointRadius:4}]},options:{plugins:{legend:{position:'top',labels:{boxWidth:12}}},scales:{y:{position:'left',grid:{color:grid},min:0,max:100,title:{display:true,text:'hit-rate %'}},y1:{position:'right',grid:{display:false},min:0,title:{display:true,text:'gen t/s'}},x:{grid:{display:false}}}}});
-  $('perfBody').innerHTML=PERF.map(p=>`<tr><td><span class="tag ${p.cold?'warn':'blue'}">${esc(p.kind)}</span></td><td class="mono">${esc(p.config)}</td><td class="n mono">${num(p.prefill_tps)}</td><td class="n mono"><b>${num(p.gen_tps)}</b></td><td class="n mono">${p.hit_rate!=null?p.hit_rate.toFixed(3):'—'}</td><td class="muted">${esc(p.notes||'')}</td></tr>`).join('');
-}
-
 /* ---------- runs explorer ---------- */
-function setView(v){VIEW=v;$('vAcc').classList.toggle('on',v==='acc');$('vPerf').classList.toggle('on',v==='perf');renderRuns()}
 function renderRuns(){
-  const q=($('q').value||'').toLowerCase();let cols,rows;
-  if(VIEW==='acc'){cols=[['ts','date'],['benchmark','benchmark'],['tag','tag'],['mode','mode'],['n','N',1],['accuracy','accuracy',1],['sec_per_q','s/q',1],['notes','notes']];rows=RUNS.slice();}
-  else{cols=[['kind','kind'],['config','config'],['prefill_tps','prefill t/s',1],['gen_tps','gen t/s',1],['hit_rate','hit-rate',1],['notes','notes']];rows=PERF.slice();}
-  rows=rows.filter(r=>!q||JSON.stringify(r).toLowerCase().includes(q));
+  const q=($('q').value||'').toLowerCase();
+  const cols=[['ts','date'],['benchmark','benchmark'],['tag','tag'],['mode','mode'],['n','N',1],['accuracy','accuracy',1],['sec_per_q','s/q',1],['notes','notes']];
+  let rows=RUNS.slice().filter(r=>!q||JSON.stringify(r).toLowerCase().includes(q));
   rows.sort((a,b)=>{const x=a[SORT.k],y=b[SORT.k];if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*SORT.d});
   $('runHead').innerHTML='<tr>'+cols.map(c=>`<th class="${c[2]?'n':''}" onclick="sortBy('${c[0]}')">${c[1]}${SORT.k===c[0]?(SORT.d>0?' ↑':' ↓'):''}</th>`).join('')+'<th></th></tr>';
-  $('runBody').innerHTML=rows.map((r,ri)=>{const clk=(VIEW==='acc'&&r.details)?` style="cursor:pointer" title="click to inspect every question" onclick="openDetails('${esc(r.details)}')"`:'';
+  $('runBody').innerHTML=rows.map((r,ri)=>{const clk=r.details?` style="cursor:pointer" title="click to inspect every question" onclick="openDetails('${esc(r.details)}')"`:'';
     const cells=cols.map(c=>{let v=r[c[0]];
-      if(c[0]==='accuracy')return `<td class="n mono"><b>${esc(v)}%</b>${(VIEW==='acc'&&r.details)?' <span style="color:var(--acc2)">🔍</span>':''}</td>`;
-      if(c[0]==='hit_rate')return `<td class="n mono">${v!=null?v.toFixed(3):'—'}</td>`;
-      if(c[0]==='tag'||c[0]==='kind')return `<td><span class="tag">${esc(v)}</span></td>`;
+      if(c[0]==='accuracy')return `<td class="n mono"><b>${esc(v)}%</b>${r.details?' <span style="color:var(--acc2)">🔍</span>':''}</td>`;
+      if(c[0]==='tag')return `<td><span class="tag">${esc(v)}</span></td>`;
       if(c[0]==='mode')return `<td><span class="tag ${v==='thinking'?'pur':''}">${esc(v||'—')}</span></td>`;
       return `<td class="${c[2]?'n mono':''} ${c[0]==='notes'?'muted':''}">${esc(v==null?'—':v)}</td>`}).join('');
-    return `<tr${clk}>${cells}<td class="n"><button class="iconbtn xs" title="copy run JSON" onclick="event.stopPropagation();copyRun('${VIEW}',${ri})">⧉</button></td></tr>`;}).join('');
+    return `<tr${clk}>${cells}<td class="n"><button class="iconbtn xs" title="copy run JSON" onclick="event.stopPropagation();copyRun(${ri})">⧉</button></td></tr>`;}).join('');
   $('runcount').textContent=rows.length+' run'+(rows.length!==1?'s':'');
   window._rrows=rows;
 }
-function copyRun(view,ri){const r=(window._rrows||[])[ri];if(r)copy(JSON.stringify(r,null,2),'Run JSON copied');}
+function copyRun(ri){const r=(window._rrows||[])[ri];if(r)copy(JSON.stringify(r,null,2),'Run JSON copied');}
 function sortBy(k){if(SORT.k===k)SORT.d*=-1;else{SORT.k=k;SORT.d=1}renderRuns()}
 
 /* ---------- live stream + activity ---------- */
@@ -1145,8 +1324,9 @@ function chatKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();chatSend
 function chatSetStatus(up){const e=$('chatStatus');if(!e||CHAT.busy)return;e.textContent=up?'● model online':'● model offline — start it from Control';e.style.color=up?'var(--ok)':'var(--dang)';$('chatSend').disabled=!up;}
 async function chatStatus(){try{const s=await fetch('/api/server/status').then(r=>r.json());chatSetStatus(s.up);}catch(e){}}
 function chatExample(b){const i=$('chatInput');i.value=b.textContent;chatAutogrow(i);i.focus();}
-function chatEmpty(){const ex=['A 45-year-old with crushing chest pain radiating to the left arm — differential and first steps?','Explain the mechanism of action of metformin.','Labs: Na 128, K 5.8, glucose 480, pH 7.1 — interpret and manage.'];
-  return `<div class="chatempty"><h3>Chat with DeepSeek-V4-Flash IQ2</h3><p class="muted">Your local medical model on <span class="mono">:8000</span>. Toggle 🧠 thinking for chain-of-thought reasoning.</p><div class="exq">${ex.map(q=>`<button onclick="chatExample(this)">${esc(q)}</button>`).join('')}</div></div>`;}
+function chatEmpty(){const ex=['Explain how a hash map works, with a worked example.','Write a function that returns the nth Fibonacci number.','What trade-offs separate TCP from UDP?'];
+  const m=(META&&META.model)?esc(META.model):'the model';
+  return `<div class="chatempty"><h3>Chat with ${m}</h3><p class="muted">Your local model, served on the OpenAI-compatible endpoint. Toggle 🧠 thinking for chain-of-thought reasoning.</p><div class="exq">${ex.map(q=>`<button onclick="chatExample(this)">${esc(q)}</button>`).join('')}</div></div>`;}
 function mdRender(t){try{return DOMPurify.sanitize(marked.parse(t||''));}catch(e){return esc(t||'').replace(/\n/g,'<br>');}}
 function splitThink(raw){const o=raw.search(/<think>/i);if(o<0)return {think:'',answer:raw};
   const open=raw.match(/<think>/i)[0];const after=raw.slice(o+open.length);const c=after.search(/<\/think>/i);
@@ -1159,7 +1339,7 @@ function chatBotInner(m){const sp=m.streaming?splitThink(m.raw):{think:m.think,a
   return h;}
 function chatBubble(m){if(m.role==='user')return `<div class="cmsg user"><div class="av">you</div><div class="body">${esc(m.content).replace(/\n/g,'<br>')}</div></div>`;
   const sid=m.streaming?' id="cmsg-stream"':'';
-  return `<div class="cmsg bot"${sid}><div class="av">ds4</div><div class="body">${chatBotInner(m)}</div></div>`+chatMeta(m);}
+  return `<div class="cmsg bot"${sid}><div class="av">ai</div><div class="body">${chatBotInner(m)}</div></div>`+chatMeta(m);}
 function chatMeta(m){if(m.streaming||!m.dt)return '';return `<div class="cmeta">${m.toks||0} tok · ${m.dt.toFixed(1)}s · ${(m.toks/Math.max(m.dt,0.1)).toFixed(1)} t/s${(m.think&&m.think.trim())?' · 🧠 reasoned':''}</div>`;}
 function chatRender(){const c=$('chatmsgs');if(!CHAT.msgs.length){c.innerHTML=chatEmpty();return;}c.innerHTML=CHAT.msgs.map(chatBubble).join('');chatDecorate();chatScroll();}
 function chatUpdateStreaming(bot){const el=document.querySelector('#cmsg-stream .body');if(!el)return;el.innerHTML=chatBotInner(bot);chatDecorate();const dt=(performance.now()-bot.t0)/1000;const e=$('chatStatus');if(e){e.textContent='generating · '+bot.toks+' tok · '+(bot.toks/Math.max(dt,0.1)).toFixed(1)+' t/s';e.style.color='var(--mut)';}chatScroll(true);}
@@ -1193,6 +1373,94 @@ async function chatSend(){
   chatRender();chatScroll();chatStatus();inp.focus();
 }
 
+/* ---------- meta wiring (title/model/host — all auto-detected) ---------- */
+function applyMeta(){
+  setText('pageTitle',(META.title||'benchy')+(META.model?(' · '+META.model):''));
+  if(META.subtitle)setText('pageSub',META.subtitle);
+  setText('baselineTagTxt',META.baseline_tag||'baseline');
+  const ct=$('chatTtl');if(ct)ct.innerHTML=(META.model?esc(META.model)+' · ':'')+'chat <span class="ep">'+esc((META.server||'')+'/v1')+'</span>';
+}
+
+/* ---------- guided setup ---------- */
+let SETUP={refs:{}};
+function openSetup(){
+  $('setupModal').style.display='block';
+  fetch('/api/config').then(r=>r.json()).then(cfg=>{
+    SETUP.refs={};const cr=cfg.references||{};
+    for(const b in cr)SETUP.refs[b]=(cr[b]||[]).map(r=>({label:r.label,acc:r.accuracy,kind:r.kind||'ref',source:r.source||''}));
+    $('setTitle').value=cfg.title||'';$('setBaseline').value=cfg.baseline_tag||'';
+    const host=META.host||{};
+    const det=[['Model',META.model||'— (start the server)'],['Host',[host.cpu||host.machine,host.mem_total_gb?host.mem_total_gb+' GB RAM':'',host.os].filter(Boolean).join(' · ')||'—'],['Server',META.server||'—']];
+    $('setupDetected').innerHTML=det.map(([k,v])=>`<span class="chip"><b>${esc(k)}</b> ${esc(v)}</span>`).join('');
+    const benches=[...new Set([...(META.benchmarks||[]),...Object.keys(SETUP.refs)])].filter(Boolean);
+    $('refBench').innerHTML=benches.length?benches.map(b=>`<option value="${esc(b)}">${esc(nice(b))}</option>`).join(''):'<option value="">— no benchmarks yet —</option>';
+    renderRefList();
+  }).catch(()=>toast('Could not load config',1));
+}
+function closeSetup(){$('setupModal').style.display='none';}
+function renderRefList(){
+  const benches=Object.keys(SETUP.refs).filter(b=>(SETUP.refs[b]||[]).length);
+  if(!benches.length){$('refList').innerHTML='<div class="muted" style="font-size:12px">No reference baselines yet — add one above, or leave empty to just compare your own runs.</div>';return;}
+  $('refList').innerHTML=benches.map(b=>`<div class="refbench">${esc(nice(b))}</div>`+SETUP.refs[b].map((r,i)=>`<div class="refrow"><span class="tag ${r.kind==='frontier'?'pur':(r.kind==='chance'?'':'blue')}">${esc(r.kind)}</span><b>${esc(r.label)}</b><span class="mono muted">${r.acc}%</span><button class="rm" title="remove" onclick="setupDelRef('${esc(b)}',${i})">✕</button></div>`).join('')).join('');
+}
+function setupAddRef(){
+  const b=$('refBench').value,lbl=($('refLabel').value||'').trim(),acc=parseFloat($('refAcc').value),kind=$('refKind').value;
+  if(!b){toast('Pick a benchmark first',1);return;}
+  if(!lbl){toast('Add a label',1);return;}
+  if(isNaN(acc)||acc<0||acc>100){toast('Score must be 0–100',1);return;}
+  (SETUP.refs[b]=SETUP.refs[b]||[]).push({label:lbl,acc:acc,kind:kind});
+  $('refLabel').value='';$('refAcc').value='';renderRefList();
+}
+function setupDelRef(b,i){SETUP.refs[b].splice(i,1);if(!SETUP.refs[b].length)delete SETUP.refs[b];renderRefList();}
+async function setupSave(){
+  const references={};
+  for(const b in SETUP.refs)references[b]=(SETUP.refs[b]||[]).map(r=>({label:r.label,accuracy:r.acc,kind:r.kind,source:r.source||''}));
+  const body={title:$('setTitle').value||'',baseline_tag:$('setBaseline').value||'',references:references};
+  try{const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+    if(r.ok){toast('Settings saved ✓');closeSetup();loadAll();}else toast('Save failed',1);
+  }catch(e){toast('Save failed',1);}
+}
+
+/* ---------- benchmark browser ---------- */
+let BENCH={data:null,timer:null};
+function openBenchmarks(){$('benchModal').style.display='block';loadBench();}
+function closeBenchmarks(){$('benchModal').style.display='none';if(BENCH.timer){clearInterval(BENCH.timer);BENCH.timer=null;}}
+async function loadBench(){
+  try{BENCH.data=await fetch('/api/benchmarks').then(r=>r.json());}catch(e){$('benchList').innerHTML='<div class="muted">could not load registry</div>';return;}
+  renderBench();
+  if(BENCH.data.fetching&&!BENCH.timer)BENCH.timer=setInterval(loadBench,2500);
+  if(!BENCH.data.fetching&&BENCH.timer){clearInterval(BENCH.timer);BENCH.timer=null;loadAll();}
+}
+function benchItem(b,fetching){
+  const fit=b.fit==='code'?'<span class="tag" title="generates code, executed against tests (pass@1)">⚙ code</span>':'';
+  const base=b.baselines?`<span class="tag pur" title="${b.baselines} published frontier baselines ship for this benchmark">★ baselines</span>`:'';
+  return `<div class="benchrow"><div style="min-width:0;flex:1"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="bn">${esc(b.name)}</span><span class="dom">${esc(b.domain)}</span>${fit}${base}</div>
+    <div class="muted" style="font-size:11.5px;margin-top:2px;line-height:1.45">${esc(b.desc||'')}</div></div>
+    <span class="br">${b.present?'<span class="tag ok">✓ installed</span>':`<button class="btn g" ${fetching?'disabled':''} onclick="fetchBench('${esc(b.key)}')">fetch</button>`}</span></div>`;
+}
+function renderBench(){
+  const d=BENCH.data||{},av=d.available||[],fetching=d.fetching;
+  const cur=av.filter(b=>b.tier==='current'),leg=av.filter(b=>b.tier!=='current');
+  const curMissing=cur.filter(b=>!b.present).length;
+  $('benchStatus').innerHTML=fetching?'<span class="livedot"></span> fetching… (files appear as they finish)':(av.filter(b=>b.present).length+' of '+av.length+' installed · '+curMissing+' current not yet fetched');
+  $('benchAll').disabled=fetching||!curMissing;$('benchAll').textContent=curMissing?('⬇ Fetch current set ('+curMissing+')'):'Current set installed';
+  const sec=(label,arr)=>arr.length?`<div class="refbench" style="margin-top:12px">${label}</div>`+arr.map(b=>benchItem(b,fetching)).join(''):'';
+  $('benchList').innerHTML=sec('Current — discriminating for mid-2026 models',cur)+sec('Legacy / saturated — small-model regression only',leg);
+  const man=d.manual||[];
+  $('benchManual').innerHTML=man.length?('<div class="refbench">Manual / gated — see DATA.md</div>'+man.map(m=>`<div class="benchrow" style="opacity:.75"><div style="flex:1;min-width:0"><span class="bn mono" style="font-size:12px">${esc(m.key)}</span><div class="muted" style="font-size:11.5px;margin-top:2px;line-height:1.45">${esc(m.desc||m.note||'')}</div></div></div>`).join('')):'';
+}
+async function fetchBench(key){
+  let keys;
+  if(key==='__current__')keys=(BENCH.data.available||[]).filter(b=>b.tier==='current'&&!b.present).map(b=>b.key);
+  else if(key==='__missing__')keys=(BENCH.data.available||[]).filter(b=>!b.present).map(b=>b.key);
+  else keys=[key];
+  if(!keys.length){toast('Nothing to fetch');return;}
+  try{const r=await fetch('/api/benchmarks/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys})}).then(r=>r.json());
+    if(r.ok){toast('Fetching '+keys.length+' benchmark'+(keys.length>1?'s':'')+'…');loadBench();}
+    else toast(r.error||'fetch failed',1);
+  }catch(e){toast('fetch failed',1);}
+}
+
 /* ---------- spotlight ---------- */
 document.addEventListener('mousemove',e=>{const c=e.target.closest&&e.target.closest('.card');if(!c)return;const r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px');});
 
@@ -1207,15 +1475,36 @@ async function pulse(){try{
   try{SYS=await fetch('/api/sys').then(r=>r.json());}catch(e){}
   if(DBG.open)dbgRender();
 }catch(e){}}
+// shared option builder: group keys by tier (current → legacy → third), registry order within each
+function tieredOptions(keys,cur,thirdLabel){
+  const g={current:[],legacy:[],other:[]};
+  keys.forEach(b=>{const t=regTier(b);g[(t==='current')?'current':(t==='legacy'?'legacy':'other')].push(b);});
+  const ord=b=>(REGMAP[b]&&REGMAP[b].ord!=null)?REGMAP[b].ord:999;
+  const og=(lab,arr)=>{if(!arr.length)return '';arr.sort((a,b)=>ord(a)-ord(b));
+    return '<optgroup label="'+lab+'">'+arr.map(b=>'<option value="'+esc(b)+'"'+(b===cur?' selected':'')+'>'+esc(regName(b))+((REGMAP[b]&&REGMAP[b].fit==='code')?' ⚙':'')+'</option>').join('')+'</optgroup>';};
+  return og('current (recommended)',g.current)+og('legacy / saturated',g.legacy)+og(thirdLabel||'other',g.other);
+}
+function fillRunMenu(){
+  const rb=$('rBench');if(!rb)return;const cur=rb.value,opts=(META.benchmarks||[]),sig=opts.join(',');
+  if(rb.dataset.sig===sig){if(cur&&opts.includes(cur))rb.value=cur;return;}
+  rb.dataset.sig=sig;
+  rb.innerHTML=opts.length?tieredOptions(opts,cur,'other / custom'):'<option value="">no benchmarks — fetch from ⬇ Benchmarks</option>';
+  if(cur&&opts.includes(cur))rb.value=cur;updateRunDesc();
+}
+function updateRunDesc(){const d=$('runDesc'),b=($('rBench')&&$('rBench').value);if(d)d.textContent=b?regDesc(b):'';}
+function syncAccToRun(){const rv=($('rBench')&&$('rBench').value),ab=$('accBench');
+  if(rv&&ab&&[...ab.options].some(o=>o.value===rv)){ab.value=rv;accBenchUser=true;accbars();}}
 async function loadAll(){try{
-  [RUNS,PERF,META,SUMMARY]=await Promise.all([fetch('/api/runs').then(r=>r.json()),fetch('/api/perf').then(r=>r.json()),fetch('/api/meta').then(r=>r.json()),fetch('/api/summary').then(r=>r.json())]);
-  {const rb=$('rBench'),cur=rb.value,opts=(META.benchmarks||['medqa_test']),sig=opts.join(',');
-   if(rb.dataset.sig!==sig){rb.innerHTML=opts.map(b=>`<option value="${esc(b)}" ${b===cur?'selected':''}>${esc(nice(b))}</option>`).join('');if(cur)rb.value=cur;rb.dataset.sig=sig;}}
-  const benches=[...new Set([...RUNS.map(r=>r.benchmark),...Object.keys(META.references||{})])].filter(Boolean);
-  const ab=$('accBench'),cur=ab.value,asig=benches.join(',');if(ab.dataset.sig!==asig){ab.innerHTML=benches.map(b=>`<option value="${esc(b)}" ${b===cur?'selected':''}>${esc(nice(b))}</option>`).join('');if(cur)ab.value=cur;ab.dataset.sig=asig;}
+  let BENCH;
+  [RUNS,PERF,META,SUMMARY,BENCH]=await Promise.all([fetch('/api/runs').then(r=>r.json()),fetch('/api/perf').then(r=>r.json()),fetch('/api/meta').then(r=>r.json()),fetch('/api/summary').then(r=>r.json()),fetch('/api/benchmarks').then(r=>r.json())]);
+  REGMAP={};(BENCH.available||[]).concat(BENCH.manual||[]).forEach((b,i)=>{REGMAP[b.key]={name:b.name||NICE[b.key]||b.key,tier:b.tier||'manual',fit:b.fit||'',desc:b.desc||'',domain:b.domain||'',ord:i};});
+  applyMeta();
+  fillRunMenu();
+  const benches=[...new Set([...RUNS.map(r=>r.benchmark),...Object.keys(META.references||{}),...(META.benchmarks||[])])].filter(Boolean);
+  const ab=$('accBench'),cur=ab.value,asig=benches.join(',');if(ab.dataset.sig!==asig){ab.innerHTML=tieredOptions(benches,cur,'reference / gated');if(cur)ab.value=cur;ab.dataset.sig=asig;}
   envStrip();experimentBand();syncBench();
   const sig=RUNS.length+'|'+PERF.length+'|'+(RUNS.length?RUNS[RUNS.length-1].ts:'')+'|'+JSON.stringify(SUMMARY.macro||{});
-  if(sig!==_dataSig){_dataSig=sig;accbars();perfCharts();renderRuns();}
+  if(sig!==_dataSig){_dataSig=sig;accbars();renderRuns();}
 }catch(e){console.error(e)}}
 loadAll();setInterval(loadAll,6000);pulse();setInterval(pulse,1500);
 </script></body></html>"""
@@ -1239,7 +1528,14 @@ class H(BaseHTTPRequestHandler):
         if p == "/" or p.startswith("/index"): self._send(200, PAGE)
         elif p == "/api/runs": self._json(read_jsonl(RUNS))
         elif p == "/api/perf": self._json(read_jsonl(PERF))
-        elif p == "/api/meta": self._json(dict(META, benchmarks=benchmarks()))
+        elif p == "/api/meta": self._json(dict(meta_payload(), benchmarks=benchmarks()))
+        elif p == "/api/config": self._json(load_config())
+        elif p == "/api/benchmarks":
+            fetching = bool(PROC.get("fetch") and PROC["fetch"].poll() is None)
+            meta = FB.registry_meta() if FB else {"available": [], "manual": []}
+            for b in meta.get("available", []):
+                b["baselines"] = len(SHIPPED_REFS.get(b["key"], []))   # # of shipped frontier baselines
+            self._json(dict(meta, fetching=fetching))
         elif p == "/api/summary": self._json(summary())
         elif p == "/api/sys": self._json(sysmetrics())
         elif p == "/api/activity": self._json(activity())
@@ -1268,20 +1564,20 @@ class H(BaseHTTPRequestHandler):
         elif p == "/api/stream": self._json(read_stream())
         elif p == "/api/server/status": self._json({"up": server_up()})
         elif p == "/api/report":
-            fn = "beepmed-report-%s.md" % datetime.date.today().isoformat()
+            fn = "benchy-report-%s.md" % datetime.date.today().isoformat()
             self._send(200, make_report(), "text/markdown; charset=utf-8",
                        {"Content-Disposition": 'attachment; filename="%s"' % fn})
         else: self._send(404, "not found", "text/plain")
     def stream_chat(self, body):
-        """Proxy a chat to the ds4 OpenAI-compatible server and relay tokens to the browser as SSE.
+        """Proxy a chat to the OpenAI-compatible server and relay tokens to the browser as SSE.
         Real streaming when the server supports it; otherwise a non-streaming fallback chunked for UX."""
         if not server_up():
-            return self._json({"error": "model server not reachable on :8000 — start it from Control"}, 503)
+            return self._json({"error": "model server not reachable on :%d — start it from Control" % SERVER_PORT}, 503)
         msgs = body.get("messages") or []
         if not isinstance(msgs, list) or not msgs:
             return self._json({"error": "no messages"}, 400)
         msgs = [{"role": m.get("role", "user"), "content": str(m.get("content", ""))} for m in msgs if m.get("content")]
-        payload = {"model": "ds4", "messages": msgs,
+        payload = {"model": model_id(), "messages": msgs,
                    "max_tokens": max(1, min(8192, int(body.get("max_tokens", 2048) or 2048))),
                    "temperature": float(body.get("temperature", 0.7) or 0),
                    "think": bool(body.get("think")), "stream": True}
@@ -1322,6 +1618,37 @@ class H(BaseHTTPRequestHandler):
         finally:
             try: up.close()
             except Exception: pass
+    def save_settings(self, body):
+        """Persist guided-setup choices to config.json (git-ignored). Everything optional
+        and sanitized: display title, baseline tag, and per-benchmark reference baselines."""
+        cfg = load_config()
+        if "title" in body:
+            cfg["title"] = (str(body.get("title") or "").strip()[:80]) or None
+        if "subtitle" in body:
+            cfg["subtitle"] = (str(body.get("subtitle") or "").strip()[:160]) or None
+        if "baseline_tag" in body:
+            cfg["baseline_tag"] = (re.sub(r"[^A-Za-z0-9_.\-]", "", str(body.get("baseline_tag") or ""))[:40]) or None
+        if "primary_ref" in body:
+            cfg["primary_ref"] = (str(body.get("primary_ref") or "").strip()[:60]) or None
+        if "references" in body:
+            refs = {}
+            for bench, items in (body.get("references") or {}).items():
+                b = re.sub(r"[^A-Za-z0-9_.\-]", "", str(bench))
+                if not b or not isinstance(items, list): continue
+                clean = []
+                for it in items:
+                    try:
+                        lbl = str(it.get("label") or "").strip()[:60]; acc = round(float(it.get("accuracy")), 1)
+                    except Exception:
+                        continue
+                    if not lbl or not (0 <= acc <= 100): continue
+                    kind = it.get("kind") if it.get("kind") in ("frontier", "ref", "chance") else "ref"
+                    clean.append({"label": lbl, "accuracy": acc, "kind": kind, "source": str(it.get("source") or "")[:160]})
+                if clean: refs[b] = clean
+            cfg["references"] = refs
+        cfg = {k: v for k, v in cfg.items() if v not in (None, "", {}, [])}
+        save_config(cfg)
+        return {"ok": True, "config": cfg}
     def do_POST(self):
         p = self.path.split("?")[0]
         if p == "/api/chat": self.stream_chat(self._body())
@@ -1330,6 +1657,8 @@ class H(BaseHTTPRequestHandler):
         elif p == "/api/server/start": self._json(start_server())
         elif p == "/api/stop-all": self._json(stop_all())
         elif p == "/api/server/stop": self._json(kill_server())
+        elif p == "/api/config": self._json(self.save_settings(self._body()))
+        elif p == "/api/benchmarks/fetch": self._json(fetch_benchmarks_async(self._body().get("keys") or []))
         else: self._send(404, "not found", "text/plain")
 
 if __name__ == "__main__":
@@ -1337,5 +1666,5 @@ if __name__ == "__main__":
     os.makedirs(RESULTS, exist_ok=True)
     _load_history()
     threading.Thread(target=_sample_metrics, daemon=True).start()
-    print("BeepMed Benchmark Explorer -> http://127.0.0.1:%d" % port, flush=True)
+    print("benchy -> http://127.0.0.1:%d" % port, flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()

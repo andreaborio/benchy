@@ -1,20 +1,37 @@
 #!/usr/bin/env python3
 """HealthBench eval with a faithful API judge (OpenAI simple-evals methodology).
 
-Our model (ds4-server) answers open-ended clinical conversations; an API grader
-scores each physician-written rubric criterion as criteria_met (true/false) using
-OpenAI's exact GRADER_TEMPLATE. Per-example score = sum(points of met criteria) /
-sum(positive points), clamped to [0,1]. Mean over examples = HealthBench score.
+The local model under test answers the open-ended conversations; an API grader scores
+each rubric criterion as criteria_met (true/false) using OpenAI's exact GRADER_TEMPLATE.
+Per-example score = sum(points of met criteria) / sum(positive points), clamped to [0,1].
+Mean over examples = HealthBench score. (This is one of the bundled rubric-graded
+benchmarks; MCQ sets go through eval_mcq.py instead.)
 
 Usage: healthbench.py <N> [tag] [think|nothink] [hard|consensus]
-Reads the API key from a .apikey file next to this script (provider auto-detected; never logged).
+Env: BENCHY_SERVER (default http://127.0.0.1:8000), BENCHY_MODEL (default: auto-detected),
+     GRADER_MODEL (override the per-provider grader; default gpt-4.1 / claude-sonnet-4-6 / gemini-2.5-pro).
+Reads the grader API key from a .apikey file next to this script (provider auto-detected; never logged).
 """
 import json, os, re, sys, time, random, datetime, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data"); RES = os.path.join(HERE, "results"); DET = os.path.join(RES, "details")
-SERVER = "http://127.0.0.1:8000/v1/chat/completions"
+SERVER_BASE = os.environ.get("BENCHY_SERVER", "http://127.0.0.1:8000").rstrip("/")
+SERVER = SERVER_BASE + "/v1/chat/completions"
 SEED = 1234
+
+def resolve_model():
+    """Model id for chat payloads: BENCHY_MODEL override > server's /v1/models > 'default'."""
+    if os.environ.get("BENCHY_MODEL"): return os.environ["BENCHY_MODEL"]
+    try:
+        with urllib.request.urlopen(SERVER_BASE + "/v1/models", timeout=5) as r:
+            ids = [m.get("id") for m in (json.load(r).get("data") or []) if m.get("id")]
+        if ids: return ids[0]
+    except Exception:
+        pass
+    return "default"
+
+MODEL = resolve_model()
 URLS = {"hard": "https://huggingface.co/datasets/openai/healthbench/resolve/main/hard_2025-05-08-21-00-10.jsonl",
         "consensus": "https://huggingface.co/datasets/openai/healthbench/resolve/main/consensus_2025-05-09-20-00-46.jsonl"}
 # default grader per provider; OpenAI gpt-4.1 = the official HealthBench judge
@@ -75,7 +92,7 @@ def parse_met(text):
         return False
 
 def ask_model(messages, think):
-    body = {"model": "ds4", "messages": messages, "temperature": 0.0,
+    body = {"model": MODEL, "messages": messages, "temperature": 0.0,
             "max_tokens": 4000 if think else 1200, "think": bool(think)}
     req = urllib.request.Request(SERVER, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
     txt = json.loads(urllib.request.urlopen(req, timeout=1200).read())["choices"][0]["message"]["content"]
@@ -83,7 +100,7 @@ def ask_model(messages, think):
 
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-    tag = sys.argv[2] if len(sys.argv) > 2 else "iq2-baseline"
+    tag = sys.argv[2] if len(sys.argv) > 2 else "baseline"
     think = (sys.argv[3] if len(sys.argv) > 3 else "think") != "nothink"
     subset = sys.argv[4] if len(sys.argv) > 4 else "hard"
     key, prov, model = load_key()

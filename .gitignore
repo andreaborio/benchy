@@ -10,6 +10,10 @@
 *.key
 *.pem
 
+# Local user settings written by the dashboard's guided setup (machine-specific:
+# reference baselines, display title, etc.). Never part of the portable suite.
+config.json
+
 # Model weights / imatrices (large, not part of the suite)
 *.gguf
 *.dat
@@ -28,8 +32,8 @@ env/
 .idea/
 .vscode/
 
-# BeepMed-internal operational scripts — machine-specific hardcoded paths and
-# ds4/imatrix-specific; NOT part of the generic benchy suite. Excluded so a clean
+# Internal/operational scripts — machine-specific hardcoded paths and engine-specific
+# (ds4/imatrix); NOT part of the portable benchy suite. Excluded so a clean
 # `git add .` ships only the portable core. Un-ignore individually after cleaning paths.
 build_medical_imatrix.py
 analyze_profile.py
@@ -41,7 +45,7 @@ healthbench_chain.sh
 profile_medical.sh
 test_imatrix_overhead.sh
 
-# Living docs / internal artifacts from the BeepMed work (not the public suite)
+# Internal working notes / generated artifacts (keep local, not in the public suite)
 MEDICAL_IMATRIX.md
 DASHBOARD_AUDIT.md
 DASHBOARD_PLAN.md

@@ -1,0 +1,45 @@
+{
+  "_note": "Published frontier-model scores, shipped as starting-point baselines for the Accuracy chart. Numbers are eval-setup-dependent (CoT / shots / harness differ from benchy's) and are shown for CONTEXT, not as size-matched head-to-head comparisons. Each carries its source + date — verify upstream. Edit/extend per benchmark in the dashboard's Setup panel (your config.json overrides these by label). Sources gathered 2026-06.",
+  "mmlu_pro": [
+    {"label": "Claude Opus 4.1 (thinking)", "accuracy": 88.0, "kind": "frontier", "source": "Artificial Analysis, 2025-08"},
+    {"label": "Claude Sonnet 4.5 (thinking)", "accuracy": 87.5, "kind": "frontier", "source": "Artificial Analysis, 2025-09"},
+    {"label": "GPT-5 (high)", "accuracy": 87.1, "kind": "frontier", "source": "Artificial Analysis, 2025-08"},
+    {"label": "Grok 4", "accuracy": 86.6, "kind": "frontier", "source": "Artificial Analysis, 2025-07"},
+    {"label": "Gemini 2.5 Pro", "accuracy": 86.2, "kind": "frontier", "source": "Artificial Analysis, 2025-03"},
+    {"label": "o3", "accuracy": 85.3, "kind": "frontier", "source": "Artificial Analysis, 2025-04"},
+    {"label": "DeepSeek-R1", "accuracy": 84.0, "kind": "frontier", "source": "DeepSeek-R1 report (arXiv 2501.12948), 2025-01"},
+    {"label": "Llama 4 Maverick", "accuracy": 80.5, "kind": "frontier", "source": "Meta Llama 4 (0-shot), 2025-04"},
+    {"label": "DeepSeek-V3", "accuracy": 75.9, "kind": "frontier", "source": "DeepSeek-V3 report (arXiv 2412.19437), 2024-12"},
+    {"label": "random chance (10-opt)", "accuracy": 10.0, "kind": "chance", "source": "1/10"}
+  ],
+  "gpqa": [
+    {"label": "o3", "accuracy": 87.7, "kind": "frontier", "source": "OpenAI o3 announcement, 2024-12"},
+    {"label": "Grok 4", "accuracy": 87.0, "kind": "frontier", "source": "Epoch AI (GPQA Diamond), 2025-07"},
+    {"label": "Claude Opus 4.5", "accuracy": 87.0, "kind": "frontier", "source": "Anthropic (via Vellum), 2025-11"},
+    {"label": "GPT-5 (thinking)", "accuracy": 85.7, "kind": "frontier", "source": "OpenAI GPT-5 launch (via Vellum), 2025-08"},
+    {"label": "Gemini 2.5 Pro", "accuracy": 84.0, "kind": "frontier", "source": "Epoch AI (GPQA Diamond), 2025-03"},
+    {"label": "DeepSeek-R1", "accuracy": 71.5, "kind": "frontier", "source": "DeepSeek-R1 report (arXiv 2501.12948), 2025-01"},
+    {"label": "Llama 4 Maverick", "accuracy": 69.8, "kind": "frontier", "source": "Meta / Artificial Analysis, 2025-04"},
+    {"label": "DeepSeek-V3", "accuracy": 59.1, "kind": "frontier", "source": "DeepSeek-R1 report (arXiv 2501.12948), 2025-01"},
+    {"label": "GPT-4o (0513)", "accuracy": 53.6, "kind": "frontier", "source": "Anthropic 3.5 launch table / klu.ai (0-shot CoT), 2024-06"},
+    {"label": "random chance (4-opt)", "accuracy": 25.0, "kind": "chance", "source": "1/4"}
+  ],
+  "humaneval": [
+    {"label": "Claude 3.5 Sonnet", "accuracy": 92.0, "kind": "frontier", "source": "Anthropic (0-shot pass@1), 2024-06"},
+    {"label": "GPT-4o", "accuracy": 90.2, "kind": "frontier", "source": "Anthropic table / DataLearner, 2024-06"},
+    {"label": "Llama 3.1 405B Instruct", "accuracy": 89.0, "kind": "frontier", "source": "Meta Llama 3.1 card (0-shot pass@1), 2024-07"},
+    {"label": "Qwen2.5-Coder-7B-Instruct", "accuracy": 88.4, "kind": "frontier", "source": "Qwen2.5-Coder report (EvalPlus), 2024-09"},
+    {"label": "DeepSeek-V3 Chat (HumanEval-Mul)", "accuracy": 82.6, "kind": "frontier", "source": "DeepSeek-V3 README, 2024-12"},
+    {"label": "Llama 3.1 70B Instruct", "accuracy": 80.5, "kind": "frontier", "source": "Meta Llama 3.1 card (0-shot pass@1), 2024-07"},
+    {"label": "Llama 3.1 8B Instruct", "accuracy": 72.6, "kind": "frontier", "source": "Meta Llama 3.1 card (0-shot pass@1), 2024-07"}
+  ],
+  "mbpp": [
+    {"label": "Claude 3.5 Sonnet", "accuracy": 91.0, "kind": "frontier", "source": "Qwen2.5-Coder report (EvalPlus), 2024-11"},
+    {"label": "Qwen2.5-Coder-32B-Instruct", "accuracy": 90.2, "kind": "frontier", "source": "Qwen2.5-Coder report (EvalPlus), 2024-11"},
+    {"label": "DeepSeek-Coder-V2-Instruct", "accuracy": 89.4, "kind": "frontier", "source": "Qwen2.5-Coder report (EvalPlus), 2024-11"},
+    {"label": "Llama 3.1 405B Instruct", "accuracy": 88.6, "kind": "frontier", "source": "Meta Llama 3.3 card (EvalPlus), 2024-12"},
+    {"label": "Llama 3.3 70B Instruct", "accuracy": 87.6, "kind": "frontier", "source": "Meta Llama 3.3 card (EvalPlus), 2024-12"},
+    {"label": "GPT-4o", "accuracy": 86.8, "kind": "frontier", "source": "Qwen2.5-Coder report (EvalPlus), 2024-11"},
+    {"label": "DeepSeek-V3 base", "accuracy": 75.4, "kind": "frontier", "source": "DeepSeek-V3 report (3-shot base), 2024-12"}
+  ]
+}

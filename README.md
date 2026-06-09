@@ -1,33 +1,34 @@
 # benchy
 
-**A multi-benchmark test suite and live dashboard for local medical LLMs.**
+**A local LLM benchmark suite and live dashboard.**
 
-`benchy` runs a panel of medical question-answering benchmarks against an
-OpenAI-compatible inference server, scores them deterministically, and shows the
-results — accuracy, confidence intervals, per-question drill-down, and live system
-metrics — in a single-file web dashboard. It was built for and is tested with
-[**ds4 / DwarfStar**](#built-for-ds4) serving DeepSeek-V4-Flash on Apple Silicon,
-but the benchmark runners talk plain OpenAI Chat Completions and work against any
-compatible endpoint.
+`benchy` runs a panel of question-answering benchmarks against any OpenAI-compatible
+inference server, scores them deterministically, and shows the results — accuracy,
+confidence intervals, per-question drill-down, and live system metrics — in a single-file
+web dashboard. Everything about the model and host is **auto-detected** (model id from the
+server, RAM/CPU/OS from the machine); nothing is hardcoded, so you clone it and run.
 
-> ⚕️ **Research / evaluation tool only — not a medical device.** See the
-> [disclaimer](#medical-disclaimer).
-
----
+It talks plain OpenAI Chat Completions, so it works against llama.cpp / vLLM / Ollama /
+LM Studio / [ds4](#works-with-any-openai-compatible-server) — anything that serves
+`/v1/chat/completions` and `/v1/models`.
 
 ## Highlights
 
-- **6 medical benchmarks** out of the box — 5 multiple-choice (MedQA-USMLE, MedMCQA,
-  MMLU-medical, PubMedQA, MedXpertQA) + **HealthBench Hard** (OpenAI rubric-graded).
+- **Fetch well-known benchmarks** from the UI or CLI — MMLU-Pro, SuperGPQA, HumanEval/MBPP
+  (executed), MedXpertQA, MedMCQA, MedQA, plus a legacy panel — each tagged **current**
+  (still discriminates mid-2026 models) or **legacy** (saturated). `fetch_benchmarks.py current`.
+- **Bring your own benchmark** — any `{question, options{A..}, answer_idx}` JSONL drops
+  straight in. Add coding, domain, or private sets without touching the code.
 - **Deterministic scoring** — greedy decoding, fixed seed, letter-bias (χ²) checks,
   Wilson 95% confidence intervals.
-- **Live dashboard** — per-question feed with drill-down, running accuracy, accuracy
-  vs. published reference baselines, and live host/server metrics (model RSS, decode
-  t/s, system memory & swap).
-- **`think` / `no-think` modes** — toggles ds4's reasoning so you can measure the
-  test-time-reasoning delta.
-- **Data-harvesting tools** — mine the questions the model got wrong (for fine-tuning
-  sets) and assemble an importance-matrix calibration corpus from real eval traffic.
+- **Live dashboard** — per-question feed with drill-down, running accuracy, accuracy vs.
+  your own reference baselines, and live host/server metrics (model RSS, decode t/s,
+  system memory & swap).
+- **Auto-detect + guided setup** — the model id and host specs are read live; an in-UI
+  **Setup** panel lets you add optional comparison baselines and a display title (saved to
+  a git-ignored `config.json`). No static values baked into the repo.
+- **`think` / `no-think` modes** — toggle server-side reasoning to measure the
+  test-time-reasoning delta (sent as a `think` field; servers that don't use it ignore it).
 - **Zero pip dependencies** for the core — Python standard library only. (HealthBench
   grading needs one API key; see below.)
 
@@ -35,115 +36,145 @@ compatible endpoint.
 
 ```
               ┌────────────────┐   OpenAI /v1/chat/completions   ┌──────────────────┐
-   benchy ───▶│  eval_mcq.py   │────────────────────────────────▶│   ds4-server     │
-   runners    │  healthbench.py│◀────────────────────────────────│  (:8000)         │
-              └───────┬────────┘   completions                    │  DeepSeek-V4-... │
-                      │ writes                                     └────────┬─────────┘
-                      ▼                                                     │ server.log
-              results/{runs,details,stream,metrics}.jsonl ◀────────────────┘ (live timing)
+   benchy ───▶│  eval_mcq.py   │────────────────────────────────▶│  your model      │
+   runners    │  healthbench.py│◀────────────────────────────────│  server (:8000)  │
+              └───────┬────────┘   completions                    └────────┬─────────┘
+                      │ writes                                              │ server.log
+                      ▼                                                     │ (live timing)
+              results/{runs,details,stream,metrics}.jsonl ◀────────────────┘
                       │
                       ▼
               dashboard.py (:8050) ── live web UI
 ```
 
 - The **runners** send each question to the server and score the reply. MCQ runners
-  parse a single answer letter; HealthBench sends the conversation, takes the model's
-  answer, and grades it against its rubric with an external judge model.
-- The **dashboard** reads only files under `results/` plus the server's `server.log`
-  for live decode-speed/timing. It does not modify the model or the server.
-
-`benchy` does **not** patch or require any change to ds4 — it uses the server's
-standard API. (The reasoning toggle is sent as a `think` field, which ds4 understands.)
+  (`eval_mcq.py`) parse a single answer letter; `healthbench.py` sends the conversation and
+  grades the answer against its rubric with an external judge model.
+- The **dashboard** reads only files under `results/` plus the server's `server.log` for
+  live decode-speed/timing. It auto-detects the model id (`/v1/models`) and host specs and
+  does not modify the model or the server.
 
 ## Quickstart
 
-**Requirements:** Python 3.10+ (standard library only). A running OpenAI-compatible
-server on `:8000` — e.g. `ds4-server`. For HealthBench grading, an OpenAI API key.
+**Requirements:** Python 3.10+ (standard library only). A running OpenAI-compatible server
+on `:8000`. For HealthBench grading, an OpenAI/Anthropic/Google API key.
 
 ```sh
-# 1. Fetch the benchmark datasets (downloads to data/, see DATA.md for sources/licenses)
-python3 fetch_benchmarks.py
+# 1. Fetch some benchmarks into data/ (see DATA.md for sources & licenses)
+python3 fetch_benchmarks.py list                 # see what's available (tiered)
+python3 fetch_benchmarks.py current              # fetch the recommended current set
+#   …or pick specific ones: python3 fetch_benchmarks.py mmlu_pro humaneval medqa_test
+#   …or use the ⬇ Benchmarks button in the dashboard.
 
-# 2. Start your model server on :8000 (example: ds4)
-ds4-server -m model.gguf --ssd-streaming --ssd-streaming-cache-experts 40GB --ctx 16384 --port 8000
+# 2. Start any OpenAI-compatible server on :8000 (whatever you use)
+#    e.g. llama-server -m model.gguf --port 8000   (or vLLM / Ollama / LM Studio / ds4)
 
 # 3. Run a multiple-choice benchmark
 #    eval_mcq.py <data.jsonl> <N> [think|nothink] [tag] [notes...]
-python3 eval_mcq.py data/medqa_test.jsonl 60 think iq2-baseline
+python3 eval_mcq.py data/mmlu_pro.jsonl 60 think run1
 
-# 4. (optional) Run HealthBench Hard — rubric-graded, needs an API key
-echo "sk-..." > .apikey            # OpenAI key, used only for the grader; chmod 600
-python3 healthbench.py 20 iq2-baseline think hard
+# 4. (optional) Run HealthBench — rubric-graded, needs an API key for the grader
+echo "sk-..." > .apikey            # grader key (OpenAI/Anthropic/Google auto-detected); chmod 600
+python3 healthbench.py 20 run1 think hard
 
 # 5. Open the live dashboard
 python3 dashboard.py 8050          # → http://localhost:8050
 ```
 
-The dashboard can also start/stop the server and launch runs from the browser.
+The dashboard can also fetch benchmarks, start/stop the server, and launch runs from the
+browser. **Config:** set `BENCHY_SERVER` (default `http://127.0.0.1:8000`) and
+`BENCHY_MODEL` (default: auto-detected from `/v1/models`) if your setup differs.
 
 ## Benchmarks
 
-| Benchmark      | Type            | Options | Metric                    |
-|----------------|-----------------|:-------:|---------------------------|
-| MedQA (USMLE)  | clinical MCQ    | 4       | accuracy                  |
-| MedMCQA        | medical MCQ     | 4       | accuracy                  |
-| MMLU-medical   | medical MCQ     | 4       | accuracy                  |
-| PubMedQA       | abstract QA     | 3       | accuracy                  |
-| MedXpertQA     | expert MCQ      | 10      | accuracy                  |
-| HealthBench Hard | open-ended    | —       | rubric score (0–100), not % correct |
+Fetchable via `fetch_benchmarks.py` / the dashboard (MCQ sets normalised to
+`{question, options{A..}, answer_idx}`; code sets executed for pass@1). Each is tagged
+**current** (still discriminates strong mid-2026 models) or **legacy** (saturated — top
+models near ceiling, useful only as a small/quantized-model regression check). Fetch the
+recommended set with `python3 fetch_benchmarks.py current` or the dashboard's **⬇ Benchmarks**.
 
-Sources, citations, and **per-dataset licenses** are in **[DATA.md](DATA.md)**. The
-datasets are **not** redistributed here. `fetch_benchmarks.py` auto-downloads
-**MedMCQA, PubMedQA, and MMLU-medical** from the Hugging Face datasets server;
-**MedQA, MedXpertQA, and HealthBench** are obtained from their own upstreams (see DATA.md).
+**Current (recommended):**
+
+| Benchmark        | Domain        | Fit       | Source (HF)                       |
+|------------------|---------------|-----------|-----------------------------------|
+| MMLU-Pro         | reasoning     | mcq (≤10) | `TIGER-Lab/MMLU-Pro`             |
+| SuperGPQA        | reasoning     | mcq       | `m-a-p/SuperGPQA`                |
+| MMLU — logic     | reasoning     | mcq (4)   | `cais/mmlu` (formal_logic)       |
+| TruthfulQA (MC1) | truthfulness  | mcq       | `truthfulqa/truthful_qa`         |
+| HumanEval        | code          | exec pass@1 | `openai/openai_humaneval`      |
+| MBPP             | code          | exec pass@1 | `google-research-datasets/mbpp`|
+| MedXpertQA (Text)| medical       | mcq (≤10) | `TsinghuaC3I/MedXpertQA`         |
+| MedMCQA          | medical       | mcq (4)   | `openlifescienceai/medmcqa`      |
+| MedQA (USMLE)    | medical       | mcq (4)   | `GBaker/MedQA-USMLE-4-options`   |
+
+**Legacy / saturated** (fetchable, off by default): ARC-Challenge, HellaSwag, CommonsenseQA,
+OpenBookQA, WinoGrande, MMLU-CS, PubMedQA, MMLU-medical.
+
+**Manual / gated:** **GPQA** Diamond (the frontier science discriminator — gated, needs a HF
+token), **HLE** (gated, mostly free-form/multimodal), and **HealthBench** (rubric-graded, run
+by `healthbench.py`). Relevant but **out of scope** for this harness (would need new runners):
+SWE-bench & LiveCodeBench (agentic / stdin-stdout code), AIME/MATH/FrontierMath (numeric/proof
+grading), SimpleQA & IFEval (judge / programmatic verifiers), ARC-AGI (grid program synthesis).
+
+**Code benchmarks** (HumanEval, MBPP) are run by `eval_code.py`: the model writes a function
+and `benchy` **executes it against the task's tests** to score pass@1.
+> ⚠ This runs model-generated code on your machine — each candidate in a separate process
+> with a timeout (`BENCHY_CODE_TIMEOUT`, default 12s). Only run locally with models/benchmarks
+> you trust. (Agentic / repo-level sets like SWE-bench are out of scope.)
+
+**HealthBench** is fetched and run separately by `healthbench.py` (rubric-graded by an
+external judge — see Quickstart step 4). Rubric scores are a 0–100 rubric mean, **not**
+percent correct, and are excluded from the MCQ macro-average. Gated sets (GPQA, HLE) need a
+manual download (a HF token) — see **[DATA.md](DATA.md)**.
+
+Sources, citations, and **per-dataset licenses** are in **[DATA.md](DATA.md)**. The datasets
+are **not** redistributed here; `fetch_benchmarks.py` downloads them on demand.
 
 ## Methodology & caveats (read before quoting numbers)
 
 `benchy` is built to be honest about its own limits:
 
-- **Small-N noise.** Quick runs use small N; accuracies carry **Wilson 95% CIs**. Treat
-  two results whose CIs overlap as indistinguishable.
-- **HealthBench is a rubric score, not percent-correct.** It is the fraction of weighted
-  rubric points met (0–100), graded by an external judge model — so it is not directly
-  comparable to MCQ accuracy and is **excluded from the MCQ macro-average**. Grading
-  costs API calls and the harness does not restrict prompt language.
-- **Reference baselines are external published numbers**, cited per benchmark; some
-  (e.g. on saturated benchmarks) are explicitly marked approximate. They are shown for
-  **context, not as size-matched head-to-head comparisons** — a small local model and a
-  large frontier model are different weight classes.
+- **Small-N noise.** Quick runs use small N; accuracies carry **Wilson 95% CIs**. Treat two
+  results whose CIs overlap as indistinguishable.
+- **Reference baselines.** `benchy` ships published **frontier-model scores** for several
+  benchmarks (MMLU-Pro, GPQA, HumanEval, MBPP) in `references.json` — each with its source +
+  date. They are **eval-setup-dependent** (CoT / shots / harness differ from `benchy`'s) and
+  shown for **context, not size-matched head-to-head comparisons**. Edit or add your own per
+  benchmark in **Setup** (your `config.json` overrides the shipped numbers by label).
+- **Rubric scores ≠ accuracy.** HealthBench-style scores are the fraction of weighted rubric
+  points met (0–100), graded by an external judge — not directly comparable to MCQ accuracy
+  and excluded from the macro-average.
 - **Live system metrics are host-level where labelled** (system memory/swap are
-  whole-machine; "model RSS" is the server process). Decode t/s is parsed from
-  `ds4-server`'s log format and is engine-specific.
+  whole-machine; "model RSS" is the server process). Decode t/s is parsed from the server's
+  log and is engine-specific (best-effort; absent for servers with a different log format).
 - **Determinism** assumes a greedy, temperature-0 server; results can still drift with
   thermal throttling, page-cache state, and server build.
 
-## Built for ds4
+## Works with any OpenAI-compatible server
 
-`benchy` was developed alongside **ds4** (a.k.a. *DwarfStar*), the narrow
-DeepSeek-V4-Flash inference engine by **Salvatore Sanfilippo
-([antirez](https://github.com/antirez))**. ds4 is a separate project under its own
-license; `benchy` only consumes its OpenAI-compatible API and log output. All credit for
-the inference engine belongs to its authors — please refer to and cite the ds4 project
-directly. `benchy` neither vendors nor modifies it.
+`benchy` only consumes the standard OpenAI API (`/v1/chat/completions`, `/v1/models`) and the
+server's log output for live timing — it neither patches nor requires any specific engine.
+It was developed against **ds4** (a.k.a. *DwarfStar*), the DeepSeek-V4-Flash inference engine
+by **Salvatore Sanfilippo ([antirez](https://github.com/antirez))**; the in-UI "Start server"
+button falls back to a ds4 checkout (`DS4_DIR`) but you can point it at any command via
+`config.json` (`"server": {"cmd": [...]}`). ds4 is a separate project under its own license —
+please refer to and cite it directly.
 
 ## Acknowledgments
 
-- **ds4 / DwarfStar** — Salvatore Sanfilippo (antirez) — the inference engine this suite
-  was built to exercise.
-- The authors of each benchmark dataset (MedQA, MedMCQA, MMLU, PubMedQA, MedXpertQA) and
-  of **HealthBench** (OpenAI) — see [DATA.md](DATA.md) for papers and licenses.
-- Published reference scores credit their respective reports (e.g. the MedGemma technical
-  report, arXiv:2507.05201, and model system cards), cited in-app and in `DATA.md`.
+- **ds4 / DwarfStar** — Salvatore Sanfilippo (antirez) — the inference engine `benchy` was
+  first built to exercise.
+- The authors of each benchmark dataset (see **[DATA.md](DATA.md)** for papers and licenses)
+  and of **HealthBench** (OpenAI).
 
-## Medical disclaimer
+## A note on the bundled medical datasets
 
-`benchy` is a **research and model-evaluation tool**. It is **not** a medical device and
-its outputs must **not** be used for diagnosis, treatment, or any clinical
-decision-making. Benchmark scores measure performance on static question sets and do not
-establish clinical safety or efficacy. Any model evaluated here remains the
-responsibility of its operator.
+Some bundled benchmarks (MedMCQA, PubMedQA, MMLU-medical, HealthBench) are medical. They are
+**research/evaluation material only** — benchmark scores measure performance on static
+question sets and must **not** be used for diagnosis, treatment, or any clinical decision.
+Any model you evaluate remains the responsibility of its operator.
 
 ## License
 
-Source code: **MIT** — see [LICENSE](LICENSE). The benchmark datasets and the ds4 engine
+Source code: **MIT** — see [LICENSE](LICENSE). The benchmark datasets and any inference engine
 are **not** covered by this license and retain their own terms ([DATA.md](DATA.md)).

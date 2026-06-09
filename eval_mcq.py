@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""MCQ medical-benchmark scorer against a ds4-server OpenAI-compatible API,
-with structured + live per-question streaming for the dashboard.
+"""Multiple-choice benchmark scorer against any OpenAI-compatible chat API, with
+structured + live per-question streaming for the dashboard.
+
+Works on any dataset in the unified MCQ format — {question, options{A..}, answer_idx} —
+so you can drop in your own JSONL (knowledge, reasoning, coding-MCQ, …), not just the
+bundled sets.
 
 Usage: eval_mcq.py <jsonl> <N> [think|nothink] [tag] [notes...]
+
+Env: BENCHY_SERVER (default http://127.0.0.1:8000), BENCHY_MODEL (default: auto-detected
+from the server's /v1/models).
 
 Writes (under results/):
   runs.jsonl   one summary record per completed run
@@ -18,8 +25,22 @@ RUNS = os.path.join(RESULTS, "runs.jsonl")
 LIVE = os.path.join(RESULTS, "live.json")
 STREAM = os.path.join(RESULTS, "stream.jsonl")
 DETAILS = os.path.join(RESULTS, "details")
-SERVER = "http://127.0.0.1:8000/v1/chat/completions"
+SERVER_BASE = os.environ.get("BENCHY_SERVER", "http://127.0.0.1:8000").rstrip("/")
+SERVER = SERVER_BASE + "/v1/chat/completions"
 SEED = 1234
+
+def resolve_model():
+    """Model id for chat payloads: BENCHY_MODEL override > server's /v1/models > 'default'."""
+    if os.environ.get("BENCHY_MODEL"): return os.environ["BENCHY_MODEL"]
+    try:
+        with urllib.request.urlopen(SERVER_BASE + "/v1/models", timeout=5) as r:
+            ids = [m.get("id") for m in (json.load(r).get("data") or []) if m.get("id")]
+        if ids: return ids[0]
+    except Exception:
+        pass
+    return "default"
+
+MODEL = resolve_model()
 
 def load(path, n):
     rows = [json.loads(l) for l in open(path) if l.strip()]
@@ -36,7 +57,7 @@ def build_prompt(r):
     return "\n".join(lines), keys
 
 def ask(prompt, think):
-    body = {"model": "ds4", "messages": [{"role": "user", "content": prompt}],
+    body = {"model": MODEL, "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 3072 if think else 8, "temperature": 0.0, "think": bool(think)}
     req = urllib.request.Request(SERVER, data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
@@ -80,11 +101,12 @@ def main():
     path = sys.argv[1]
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 100
     think = len(sys.argv) > 3 and sys.argv[3] == "think"
-    tag = sys.argv[4] if len(sys.argv) > 4 else "iq2-baseline"
+    tag = sys.argv[4] if len(sys.argv) > 4 else "baseline"
     notes = " ".join(sys.argv[5:]) if len(sys.argv) > 5 else ""
     mode = "thinking" if think else "nothink"
     bench = os.path.basename(path).replace(".jsonl", "")
     rows = load(path, n)
+    n_options = max((len(build_prompt(r)[1]) for r in rows), default=0)  # #answer options (for chance line + bias χ²)
     os.makedirs(RESULTS, exist_ok=True)
     open(STREAM, "w").close()  # clear the live feed
     os.makedirs(DETAILS, exist_ok=True)
@@ -129,8 +151,8 @@ def main():
     rec = {"ts": datetime.datetime.now().isoformat(timespec="seconds"), "tag": tag,
            "benchmark": bench, "mode": mode, "n": len(rows), "correct": correct,
            "accuracy": round(acc, 1), "seed": SEED, "duration_s": round(dt),
-           "sec_per_q": round(dt / len(rows), 1), "letter_dist": dist, "notes": notes,
-           "details": os.path.basename(detfile)}
+           "sec_per_q": round(dt / len(rows), 1), "letter_dist": dist, "n_options": n_options,
+           "notes": notes, "details": os.path.basename(detfile)}
     open(RUNS, "a").write(json.dumps(rec) + "\n")
     write_live({"running": False, "tag": tag, "benchmark": bench, "mode": mode,
                 "i": len(rows), "n": len(rows), "correct": correct,
