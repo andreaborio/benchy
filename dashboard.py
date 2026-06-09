@@ -686,11 +686,11 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 :root{--bg:#000;--card:#0c0c0d;--card2:#0f0f11;--bd:#1d1d20;--bd2:#2a2a2e;--ink:#ededed;--mut:#8a8a8a;--mut2:#5f5f63;
 --acc:#0070f3;--acc2:#3291ff;--ok:#0cce6b;--teal:#50e3c2;--warn:#f5a623;--dang:#ff4d4f;--pur:#8a63d2;--pur2:#a855f7}
 *{box-sizing:border-box}html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
 a{color:var(--acc2);text-decoration:none}a:hover{text-decoration:underline}
 /* aurora backdrop */
-.aurora{position:fixed;inset:-30vh -10vw;z-index:0;pointer-events:none;filter:blur(90px);opacity:.40}
+.aurora{display:none}
 .aurora i{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:drift 22s ease-in-out infinite}
 .aurora i:nth-child(1){width:46vw;height:46vw;left:-6vw;top:-8vh;background:radial-gradient(circle,#0b3a86,transparent 62%)}
 .aurora i:nth-child(2){width:42vw;height:42vw;right:-6vw;top:-12vh;background:radial-gradient(circle,#5b2a8c,transparent 62%);animation-delay:-7s}
@@ -698,7 +698,7 @@ a{color:var(--acc2);text-decoration:none}a:hover{text-decoration:underline}
 @keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(5vw,4vh) scale(1.12)}66%{transform:translate(-4vw,2vh) scale(.92)}}
 .nav{position:sticky;top:0;z-index:30;background:rgba(0,0,0,.66);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:18px;padding:0 22px;height:56px}
 .brand{font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:9px}
-.brand .logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--acc),var(--pur2));box-shadow:0 0 18px rgba(50,145,255,.45);position:relative}
+.brand .logo{width:22px;height:22px;border-radius:6px;background:var(--ink);position:relative}
 .brand .logo::after{content:'';position:absolute;inset:5px;border-radius:4px;background:#000;opacity:.55}
 .navlinks{display:flex;gap:2px}.navlinks a{color:var(--mut);padding:7px 12px;border-radius:8px;font-weight:500;font-size:13px;transition:.18s}
 .navlinks a:hover{color:var(--ink);background:#141416}.navlinks a.on{color:var(--ink);background:#18181b}
@@ -708,20 +708,20 @@ a{color:var(--acc2);text-decoration:none}a:hover{text-decoration:underline}
 @keyframes pp{0%{box-shadow:0 0 0 0 rgba(12,206,107,.5)}70%{box-shadow:0 0 0 8px rgba(12,206,107,0)}100%{box-shadow:0 0 0 0 rgba(12,206,107,0)}}
 .wrap{position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:26px 22px 90px}
 .hl{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
-h1{font-size:26px;font-weight:800;letter-spacing:-.03em;margin:0;background:linear-gradient(180deg,#fff,#b9b9c2);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+h1{font-size:24px;font-weight:600;letter-spacing:-.03em;margin:0;color:var(--ink)}
 .sub{color:var(--mut);margin:5px 0 0}
 .modelcard{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 4px}
 .mcchip{font-size:11.5px;color:var(--mut);background:#0d0d0f;border:1px solid var(--bd);border-radius:7px;padding:5px 9px}
 .mcchip b{color:var(--ink);font-weight:600}
 .btn{background:var(--ink);color:#000;border:0;border-radius:9px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;transition:.16s}
-.btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(255,255,255,.12)}
-.btn.g{background:#161618;color:var(--ink);border:1px solid var(--bd2)}.btn.g:hover{box-shadow:0 4px 16px rgba(0,0,0,.4);border-color:#3a3a40}
-.btn.dang{background:#3a1416;color:#ff8b8d;border:1px solid rgba(255,77,79,.35)}.btn.dang:hover{box-shadow:0 4px 16px rgba(255,77,79,.18)}
+.btn:hover{background:#fff}
+.btn.g{background:transparent;color:var(--ink);border:1px solid var(--bd2)}.btn.g:hover{background:#161618;border-color:#3a3a40}
+.btn.dang{background:transparent;color:#ff8b8d;border:1px solid rgba(255,77,79,.32)}.btn.dang:hover{background:#241113;border-color:rgba(255,77,79,.5)}
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 .grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
 @media(max-width:860px){.g4{grid-template-columns:1fr 1fr}.g3,.g2{grid-template-columns:1fr}}
-.card{position:relative;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--bd);border-radius:14px;padding:18px}
-.card::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(340px circle at var(--mx,50%) var(--my,-30%),rgba(120,160,255,.07),transparent 60%)}
+.card{position:relative;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px}
+.card::after{display:none}
 .card:hover::after{opacity:1}
 .card h3{margin:0 0 3px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
 .ch{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -899,7 +899,7 @@ canvas{max-height:280px}
   <h1 id="pageTitle">benchy</h1>
   <p class="sub" id="pageSub">Local LLM benchmark suite — each <b>run</b> (a model / quant / build) is scored across a panel of benchmarks on your own machine.</p>
 </div>
-<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn g" onclick="openBenchmarks()">⬇ Benchmarks</button><button class="btn g" onclick="openSetup()">⚙ Setup</button><button class="btn g" onclick="loadAll();pulse()">↻ Refresh</button><button class="btn g" onclick="copyReport(this)">⧉ Copy report</button><button class="btn" onclick="location.href='/api/report'">⬇ Export</button></div></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn g" onclick="openBenchmarks()">Benchmarks</button><button class="btn g" onclick="openSetup()">Setup</button><button class="btn g" onclick="loadAll();pulse()">Refresh</button><button class="btn g" onclick="copyReport(this)">Copy report</button><button class="btn" onclick="location.href='/api/report'">Export</button></div></div>
 <div class="envstrip" id="envstrip"></div>
 
 <!-- EXPERIMENT -->
@@ -922,7 +922,7 @@ canvas{max-height:280px}
   <div class="card"><h3>Model server</h3>
     <div class="toolbar" style="margin:11px 0 0"><span class="tag" id="srvPill">checking…</span>
       <button class="btn g" id="srvBtn" onclick="startServer()">Start server</button>
-      <button class="btn dang" onclick="stopAll()">⛔ Stop all tests</button>
+      <button class="btn dang" onclick="stopAll()">Stop all tests</button>
       <button class="btn g" onclick="killServer()" title="force-kill the model server">kill server</button>
       <span class="muted" id="srvMsg" style="font-size:12px"></span></div>
     <p class="muted" style="font-size:12px;margin:11px 0 0;line-height:1.55">Tag each run (e.g. a model, quant, or build name) so runs compare against your <b id="baselineTagTxt" style="color:var(--pur2)">baseline</b> tag in Accuracy. Add optional reference baselines in <a href="#" onclick="openSetup();return false">Setup</a>.</p></div>
@@ -930,10 +930,10 @@ canvas{max-height:280px}
     <div class="toolbar" style="margin:11px 0 0">
       <select id="rBench" onchange="rBenchUser=true;updateRunDesc();syncAccToRun()"></select>
       <input id="rN" type="number" value="25" min="1" style="width:78px" title="N questions">
-      <div class="seg"><button id="segT" class="on" onclick="setMode('thinking')">🧠 thinking</button><button id="segN" onclick="setMode('nothink')">⚡ nothink</button></div>
+      <div class="seg"><button id="segT" class="on" onclick="setMode('thinking')">thinking</button><button id="segN" onclick="setMode('nothink')">nothink</button></div>
       <input id="rTag" type="text" value="" style="width:150px" placeholder="run tag (e.g. baseline)">
-      <button class="btn" id="runBtn" onclick="runTest()">▶ Run</button>
-      <button class="btn g" id="stopBtn" onclick="stopTest()" style="display:none">■ Stop</button>
+      <button class="btn" id="runBtn" onclick="runTest()">Run</button>
+      <button class="btn g" id="stopBtn" onclick="stopTest()" style="display:none">Stop</button>
       <span class="muted" id="runMsg" style="font-size:12px"></span></div>
     <p class="muted" id="runDesc" style="font-size:12px;margin:9px 0 0;min-height:16px;line-height:1.5"></p></div>
 </div></div>
@@ -944,7 +944,7 @@ canvas{max-height:280px}
     <div class="live-head">
       <span class="phase" id="phasePill" data-p="idle"><span class="phdot"></span><span id="phaseTxt">idle</span></span>
       <span class="live-meta" id="liveMeta"></span>
-      <button class="iconbtn" style="margin-left:auto" onclick="copyDiag()" title="copy a JSON snapshot of live/sys/activity for debugging">{ } copy diagnostics</button>
+      <button class="iconbtn" style="margin-left:auto" onclick="copyDiag()" title="copy a JSON snapshot of live/sys/activity for debugging">copy diagnostics</button>
     </div>
     <div class="grid g3">
       <div class="metric"><div class="mlabel">decode</div><div class="mval"><span id="tpsVal">—</span><small>t/s</small></div><div class="mfoot" id="tpsFoot">avg —</div></div>
@@ -963,7 +963,7 @@ canvas{max-height:280px}
         <div class="eqcap"><span>per question (oldest→newest)</span><span id="latCapR"></span></div></div>
     </div>
     <div class="card feedcard"><div class="ch"><h3>Questions &amp; answers <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500" id="feedCount"></span></h3>
-      <div style="display:flex;gap:8px;align-items:center"><div class="seg sm"><button id="fAll" class="on" onclick="setFeedFilter('all')">all</button><button id="fOk" onclick="setFeedFilter('ok')">✓</button><button id="fNo" onclick="setFeedFilter('no')">✗</button></div><button class="iconbtn xs" title="open the full detail page (full question, all options, full model output)" onclick="openLiveDetails()">🔍 detail</button></div></div>
+      <div style="display:flex;gap:8px;align-items:center"><div class="seg sm"><button id="fAll" class="on" onclick="setFeedFilter('all')">all</button><button id="fOk" onclick="setFeedFilter('ok')">correct</button><button id="fNo" onclick="setFeedFilter('no')">wrong</button></div><button class="iconbtn xs" title="open the full detail page (full question, all options, full model output)" onclick="openLiveDetails()">detail</button></div></div>
       <div class="qadonut"><div class="dchart"><canvas id="qaDonutChart"></canvas><div class="dctr"><b id="qaPct">—</b><small>correct</small></div></div><div class="dleg" id="qaLeg"></div></div>
       <div class="feed" id="feed" title="click a row for the full question & model output"></div></div>
   </div></div>
@@ -998,16 +998,16 @@ canvas{max-height:280px}
 
 <div id="detModal" onclick="if(event.target===this)closeDetails()"><div class="box">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 id="detTitle" style="margin:0">Run detail</h2>
-    <div style="display:flex;gap:8px"><button class="iconbtn" id="detCopyWrong" onclick="copyWrong()">⧉ copy wrong as JSON</button><button class="btn g" onclick="closeDetails()">✕ Close</button></div></div>
+    <div style="display:flex;gap:8px"><button class="iconbtn" id="detCopyWrong" onclick="copyWrong()">⧉ copy wrong as JSON</button><button class="btn g" onclick="closeDetails()">Close</button></div></div>
   <div id="detSummary" class="muted" style="font-size:13px;margin-top:4px"></div>
-  <div class="dtoolbar"><div class="seg sm"><button id="dfAll" class="on" onclick="setDetFilter('all')">all</button><button id="dfOk" onclick="setDetFilter('ok')">✓ correct</button><button id="dfNo" onclick="setDetFilter('no')">✗ wrong</button></div>
+  <div class="dtoolbar"><div class="seg sm"><button id="dfAll" class="on" onclick="setDetFilter('all')">all</button><button id="dfOk" onclick="setDetFilter('ok')">correct</button><button id="dfNo" onclick="setDetFilter('no')">wrong</button></div>
     <input type="search" id="detQ" placeholder="search questions…" oninput="renderDet()" style="flex:1;min-width:160px"></div>
   <div id="detBody"></div>
 </div></div>
 
 <div id="setupModal" onclick="if(event.target===this)closeSetup()"><div class="box" style="max-width:680px">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">⚙ Setup</h2>
-    <button class="btn g" onclick="closeSetup()">✕ Close</button></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">Setup</h2>
+    <button class="btn g" onclick="closeSetup()">Close</button></div>
   <p class="muted" style="font-size:12.5px;margin:6px 0 14px;line-height:1.5">All optional. Model id and host specs are auto-detected from your running server and OS — nothing here is required to run benchmarks. Saved to a git-ignored <code class="mono">config.json</code>.</p>
 
   <h3 style="font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 8px">Auto-detected</h3>
@@ -1030,9 +1030,9 @@ canvas{max-height:280px}
 </div></div>
 
 <div id="benchModal" onclick="if(event.target===this)closeBenchmarks()"><div class="box" style="max-width:680px">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">⬇ Benchmarks</h2>
-    <div style="display:flex;gap:8px"><button class="btn" id="benchAll" onclick="fetchBench('__current__')">⬇ Fetch current set</button><button class="btn g" onclick="closeBenchmarks()">✕ Close</button></div></div>
-  <p class="muted" style="font-size:12.5px;margin:6px 0 14px;line-height:1.5">Download benchmarks into <code class="mono">data/</code>. <b>Current</b> = still discriminates mid-2026 models; <b>legacy</b> = saturated (small-model regression only). <b>Code</b> sets (HumanEval/MBPP) <b>generate &amp; execute code</b> for pass@1 — ⚠ runs model-written code locally (subprocess + timeout). Each set keeps its own license/source — see <code class="mono">DATA.md</code>.</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">Benchmarks</h2>
+    <div style="display:flex;gap:8px"><button class="btn" id="benchAll" onclick="fetchBench('__current__')">Fetch current set</button><button class="btn g" onclick="closeBenchmarks()">Close</button></div></div>
+  <p class="muted" style="font-size:12.5px;margin:6px 0 14px;line-height:1.5">Download benchmarks into <code class="mono">data/</code>. <b>Current</b> = still discriminates mid-2026 models; <b>legacy</b> = saturated (small-model regression only). <b>Code</b> sets (HumanEval/MBPP) <b>generate &amp; execute code</b> for pass@1 — runs model-written code locally (subprocess + timeout). Each set keeps its own license/source — see <code class="mono">DATA.md</code>.</p>
   <div id="benchStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>
   <div id="benchList"></div>
   <div id="benchManual" style="margin-top:14px"></div>
@@ -1042,10 +1042,10 @@ canvas{max-height:280px}
 <div class="chatwrap" id="chatwrap"><div class="chat" id="chatpanel">
   <div class="chathead"><div class="ttl" id="chatTtl">chat <span class="ep" id="chatEp">/v1</span></div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <label class="ccontrols" title="chain-of-thought reasoning"><input type="checkbox" id="chatThink" style="width:auto"> 🧠 thinking</label>
+      <label class="ccontrols" title="chain-of-thought reasoning"><input type="checkbox" id="chatThink" style="width:auto"> thinking</label>
       <button class="iconbtn" onclick="chatClear()" title="clear conversation">⌫ clear</button>
       <button class="iconbtn" onclick="chatFull()" title="expand / restore">⤢</button>
-      <button class="iconbtn" onclick="chatToggle()">✕</button></div></div>
+      <button class="iconbtn" onclick="chatToggle()" aria-label="close">×</button></div></div>
   <div class="chatmsgs" id="chatmsgs"></div>
   <div class="chatcompose">
     <div class="ccontrols"><span id="chatStatus">checking server…</span><span style="margin-left:auto" class="muted">Enter to send · Shift+Enter newline</span></div>
@@ -1055,7 +1055,7 @@ canvas{max-height:280px}
 <button class="dbgbtn" onclick="toggleDbg()">&lt;/&gt; debug</button>
 <div class="dbg" id="dbg"><div class="dbgh"><b style="font-size:13px">Debug</b>
   <div class="seg sm" style="margin-left:6px"><button class="on" data-d="timeline" onclick="dbgTab('timeline')">timeline</button><button data-d="snap" onclick="dbgTab('snap')">snapshot</button><button data-d="server" onclick="dbgTab('server')">server.log</button><button data-d="eval" onclick="dbgTab('eval')">eval.log</button></div>
-  <button class="iconbtn" style="margin-left:auto" onclick="dbgCopy()">⧉ copy</button><button class="iconbtn" onclick="toggleDbg()">✕</button></div>
+  <button class="iconbtn" style="margin-left:auto" onclick="dbgCopy()">⧉ copy</button><button class="iconbtn" onclick="toggleDbg()" aria-label="close">×</button></div>
   <pre id="dbgBody" class="mono">…</pre></div>
 
 <div id="toasts"></div>
@@ -1094,9 +1094,9 @@ if(window.marked)marked.setOptions({breaks:true,gfm:true});
 
 /* ---------- clipboard + toast ---------- */
 function toast(msg,bad){const t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.textContent=msg;$('toasts').appendChild(t);requestAnimationFrame(()=>t.classList.add('in'));setTimeout(()=>{t.classList.remove('in');setTimeout(()=>t.remove(),320)},1800);}
-async function copy(text,label){try{await navigator.clipboard.writeText(text);toast((label||'Copied')+' ✓');return}catch(e){}
+async function copy(text,label){try{await navigator.clipboard.writeText(text);toast((label||'Copied'));return}catch(e){}
   const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
-  try{document.execCommand('copy');toast((label||'Copied')+' ✓')}catch(_){toast('Copy failed',1)}ta.remove();}
+  try{document.execCommand('copy');toast((label||'Copied'))}catch(_){toast('Copy failed',1)}ta.remove();}
 async function copyReport(btn){btn&&(btn.disabled=true);try{const md=await fetch('/api/report').then(r=>r.text());await copy(md,'Report markdown copied')}catch(e){toast('Could not fetch report',1)}btn&&(btn.disabled=false);}
 function copyDiag(){copy(JSON.stringify({ts:new Date().toISOString(),live:LIVE,stream_live:STREAM.live,sys:SYS,activity:ACT},null,2),'Diagnostics snapshot copied');}
 
@@ -1192,13 +1192,25 @@ function systemUI(){
   chart('sysCpuChart',{type:'line',data:{labels,datasets:[{data:cpu,borderColor:'#0cce6b',backgroundColor:'rgba(12,206,107,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:false}]},options:sysOpts('%',Math.ceil(cpuMax/10)*10)});
 }
 /* ---------- paired A/B (McNemar) ---------- */
+function commonBenches(a,b){
+  const ba=new Set((RUNS||[]).filter(r=>r.tag===a).map(r=>r.benchmark).filter(Boolean));
+  const bb=new Set((RUNS||[]).filter(r=>r.tag===b).map(r=>r.benchmark).filter(Boolean));
+  return [...ba].filter(x=>bb.has(x));   // only benchmarks BOTH models ran
+}
+function refreshCmpBench(){
+  const s=$('cmpBench');if(!s)return;const cur=s.value;
+  const benches=commonBenches($('cmpA').value,$('cmpB').value);
+  s.innerHTML=benches.length?benches.map(v=>`<option value="${esc(v)}">${esc(nice(v))}</option>`).join(''):'<option value="">— no common benchmark —</option>';
+  if(benches.includes(cur))s.value=cur;
+}
 function populateCompare(){
   const tags=[...new Set((RUNS||[]).map(r=>r.tag).filter(Boolean))];
-  const benches=[...new Set((RUNS||[]).filter(r=>!String(r.benchmark||'').startsWith('healthbench')).map(r=>r.benchmark).filter(Boolean))];
-  const fill=(id,vals,label)=>{const s=$(id);if(!s)return;const cur=s.value;s.innerHTML=vals.map(v=>`<option value="${esc(v)}">${esc(label?label(v):v)}</option>`).join('');if(vals.includes(cur))s.value=cur;};
-  fill('cmpA',tags);fill('cmpB',tags);fill('cmpBench',benches,nice);
+  const fill=(id,vals)=>{const s=$(id);if(!s)return;const cur=s.value;s.innerHTML=vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(vals.includes(cur))s.value=cur;};
+  fill('cmpA',tags);fill('cmpB',tags);
   const A=$('cmpA'),B=$('cmpB');
   if(A&&B&&tags.length>=2&&A.value===B.value){B.value=tags.find(t=>t!==A.value)||tags[1];}
+  if(A&&B&&!A._wired){A.addEventListener('change',refreshCmpBench);B.addEventListener('change',refreshCmpBench);A._wired=true;}
+  refreshCmpBench();   // benchmark list = only tests common to A and B
 }
 function fmtCompare(d){
   if(!d||!d.ok)return '<span class="muted">'+esc((d&&d.error)||'no result')+'</span>';
@@ -1207,7 +1219,7 @@ function fmtCompare(d){
     : `<b style="color:var(--warn)">no significant difference</b> (p=${d.p_value})`;
   return `<div style="font-size:13.5px">${verdict}</div>
     <div class="mono" style="margin-top:7px">${esc(d.tag_a)} <b>${d.acc_a}%</b> · ${esc(d.tag_b)} <b>${d.acc_b}%</b> · Δ <b>${d.delta>0?'+':''}${d.delta} pts</b> · N=${d.n_common} common</div>
-    <div class="mono muted" style="margin-top:4px">discordant ${d.discordant} ( ${esc(d.tag_a)}-only ${d.a_better} · ${esc(d.tag_b)}-only ${d.b_better} ) · both ✓ ${d.both_right} · both ✗ ${d.both_wrong}</div>
+    <div class="mono muted" style="margin-top:4px">discordant ${d.discordant} ( ${esc(d.tag_a)}-only ${d.a_better} · ${esc(d.tag_b)}-only ${d.b_better} ) · both right ${d.both_right} · both wrong ${d.both_wrong}</div>
     <div class="muted" style="margin-top:7px;font-size:11.5px">McNemar exact two-sided over the ${d.discordant} discordant pairs. A small p means the two builds genuinely disagree on these questions — overlapping Wilson bars can't detect a paired difference this small.</div>`;
 }
 async function runCompare(){
@@ -1233,16 +1245,16 @@ function accbars(){
   const legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 14px;font-size:12px;color:#9a9aa2">'+['ours','frontier','ref','chance'].filter(k=>present.includes(k)).map(k=>`<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:11px;height:11px;border-radius:3px;display:inline-block;background:${CLS[k][0]}"></i>${CLS[k][1]}</span>`).join('')+'</div>';
   $('accbars').innerHTML=all.length?(legend+all.map(x=>{const s=CLS[x.cls]||CLS.ref;const lbl=x.cls==='ours'?`<b>${esc(x.label)}</b>`:esc(x.label);
     const ci=(x.cls==='ours'&&x.lo!=null)?`<div class="ci" style="left:${x.lo}%;width:${Math.max(0,x.hi-x.lo)}%"></div>`:'';
-    const pv=(x.cls==='ours'&&x.lo!=null)?`${x.acc}% <small>[${x.lo}–${x.hi}]${x.small?' ⚠':''}</small>`:`${x.acc}%`;
-    return `<div class="barwrap"><div class="lab" title="${esc(x.label)}">${lbl}</div><div class="track"><div class="fill" style="width:${Math.max(2,x.acc)}%;background:${s[0]}"></div>${ci}</div><div class="pv mono">${pv}</div></div>`}).join('')):('<div class="muted">No data for '+(nice(bench)||'this benchmark')+' yet — '+(installed?'launch a run from <b>Run a test</b> above.':'<a href="#" onclick="openBenchmarks();return false">fetch it from ⬇ Benchmarks</a> first.')+'</div>');
+    const pv=(x.cls==='ours'&&x.lo!=null)?`${x.acc}% <small>[${x.lo}–${x.hi}]${x.small?' *':''}</small>`:`${x.acc}%`;
+    return `<div class="barwrap"><div class="lab" title="${esc(x.label)}">${lbl}</div><div class="track"><div class="fill" style="width:${Math.max(2,x.acc)}%;background:${s[0]}"></div>${ci}</div><div class="pv mono">${pv}</div></div>`}).join('')):('<div class="muted">No data for '+(nice(bench)||'this benchmark')+' yet — '+(installed?'launch a run from <b>Run a test</b> above.':'<a href="#" onclick="openBenchmarks();return false">fetch it from Benchmarks</a> first.')+'</div>');
   // coherence: tell the user when the selected benchmark has baselines but isn't installed to run
   const note=$('accNote');
-  if(note)note.innerHTML=((bench&&!installed&&refs.length)?'⚠ <b>'+esc(nice(bench))+'</b> isn\'t installed — <a href="#" onclick="openBenchmarks();return false">fetch it from ⬇ Benchmarks</a> to score your model against these baselines. ':'')+'Frontier baselines are <b>published numbers</b> (eval-setup-dependent — for context, not size-matched). Edit/add in <a href="#" onclick="openSetup();return false">Setup</a>.';
+  if(note)note.innerHTML=((bench&&!installed&&refs.length)?'<b>'+esc(nice(bench))+'</b> isn\'t installed — <a href="#" onclick="openBenchmarks();return false">fetch it from Benchmarks</a> to score your model against these baselines. ':'')+'Frontier baselines are <b>published numbers</b> (eval-setup-dependent — for context, not size-matched). Edit/add in <a href="#" onclick="openSetup();return false">Setup</a>.';
   // mode chart from raw runs
   const runs=RUNS.filter(r=>r.benchmark===bench);
   const byMode={};runs.forEach(r=>{(byMode[r.mode]=byMode[r.mode]||[]).push(r.accuracy)});
   const labels=Object.keys(byMode),data=labels.map(m=>byMode[m].reduce((a,b)=>a+b,0)/byMode[m].length);
-  chart('modeChart',{type:'bar',data:{labels:labels.map(m=>m==='thinking'?'🧠 thinking':'⚡ non-thinking'),datasets:[{data,backgroundColor:labels.map(m=>m==='thinking'?'#0cce6b':'#8a63d2'),borderRadius:8,barThickness:46}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.x.toFixed(1)+'%'}}},scales:{x:{beginAtZero:true,max:100,grid:{color:grid},ticks:{callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:14}}}}}});
+  chart('modeChart',{type:'bar',data:{labels:labels.map(m=>m==='thinking'?'thinking':'non-thinking'),datasets:[{data,backgroundColor:labels.map(m=>m==='thinking'?'#0cce6b':'#8a63d2'),borderRadius:8,barThickness:46}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.x.toFixed(1)+'%'}}},scales:{x:{beginAtZero:true,max:100,grid:{color:grid},ticks:{callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:14}}}}}});
   const mac=SUMMARY.macro||{};
   $('macroHint').textContent=(mac.thinking_mean!=null)?('MCQ macro-avg '+mac.thinking_mean+'% thinking (k='+mac.thinking_k+(mac.thinking_tag?', '+mac.thinking_tag:'')+')'+(mac.nothink_mean!=null?' · '+mac.nothink_mean+'% nothink (k='+mac.nothink_k+(mac.nothink_tag?', '+mac.nothink_tag:'')+')':'')+' · excl. HealthBench'):'';
 }
@@ -1257,7 +1269,7 @@ function renderRuns(){
   $('runHead').innerHTML='<tr>'+cols.map(c=>`<th class="${c[2]?'n':''}" onclick="sortBy('${c[0]}')">${c[1]}${SORT.k===c[0]?(SORT.d>0?' ↑':' ↓'):''}</th>`).join('')+'<th></th></tr>';
   $('runBody').innerHTML=rows.map((r,ri)=>{const clk=r.details?` style="cursor:pointer" title="click to inspect every question" onclick="openDetails('${esc(r.details)}')"`:'';
     const cells=cols.map(c=>{let v=r[c[0]];
-      if(c[0]==='accuracy')return `<td class="n mono"><b>${esc(v)}%</b>${r.details?' <span style="color:var(--acc2)">🔍</span>':''}</td>`;
+      if(c[0]==='accuracy')return `<td class="n mono"><b>${esc(v)}%</b>${r.details?' <span style="color:var(--acc2)">›</span>':''}</td>`;
       if(c[0]==='tag')return `<td><span class="tag">${esc(v)}</span></td>`;
       if(c[0]==='mode')return `<td><span class="tag ${v==='thinking'?'pur':''}">${esc(v||'—')}</span></td>`;
       return `<td class="${c[2]?'n mono':''} ${c[0]==='notes'?'muted':''}">${esc(v==null?'—':v)}</td>`}).join('');
@@ -1288,12 +1300,12 @@ function feedRow(e){
     return `<div class="qrow" data-qi="${e.i}"><div class="qh" onclick="openLiveDetails(${e.i})" title="open the conversation, response & rubric">
       <span style="display:inline-block;min-width:36px;text-align:center;padding:1px 5px;border-radius:5px;font-weight:700;font-size:11px;background:${col};color:#0a0a0c">${sc.toFixed(0)}%</span><b class="mono">Q${e.i}</b>
       <span class="muted">rubric score</span> <b>${esc(e.pred)}</b> <span class="muted">${esc(e.gold_txt||'')}</span>
-      <span class="qh-r"><span class="mono muted">${e.lat_q!=null?e.lat_q:e.t}s · ${e.acc}% avg</span><span class="muted" style="font-size:11px">🔍</span><button class="iconbtn xs" title="copy full Q&amp;A" onclick="event.stopPropagation();copyLiveQ(${e.i})">⧉</button></span></div></div>`;}
+      <span class="qh-r"><span class="mono muted">${e.lat_q!=null?e.lat_q:e.t}s · ${e.acc}% avg</span><span class="muted" style="font-size:11px">›</span><button class="iconbtn xs" title="copy full Q&amp;A" onclick="event.stopPropagation();copyLiveQ(${e.i})">⧉</button></span></div></div>`;}
   const cls=e.ok?'ok':'no';
   return `<div class="qrow ${cls}" data-qi="${e.i}"><div class="qh" onclick="openLiveDetails(${e.i})" title="open the full question & model output">
     <span class="mk ${cls}">${e.ok?'✓':'✗'}</span><b class="mono">Q${e.i}</b>
     <span class="muted">pred</span> <b>${esc(e.pred)}</b><span class="muted">gold</span> <b>${esc(e.gold)}</b>
-    <span class="qh-r"><span class="mono muted">${e.lat_q!=null?e.lat_q:e.t}s · ${e.acc}%</span><span class="muted" style="font-size:11px">🔍</span><button class="iconbtn xs" title="copy full Q&amp;A" onclick="event.stopPropagation();copyLiveQ(${e.i})">⧉</button></span></div></div>`;}
+    <span class="qh-r"><span class="mono muted">${e.lat_q!=null?e.lat_q:e.t}s · ${e.acc}%</span><span class="muted" style="font-size:11px">›</span><button class="iconbtn xs" title="copy full Q&amp;A" onclick="event.stopPropagation();copyLiveQ(${e.i})">⧉</button></span></div></div>`;}
 function renderFeed(evs){
   const open=new Set([...document.querySelectorAll('#feed .qrow.open')].map(n=>n.dataset.qi));
   const rows=evs.filter(e=>FEEDF==='all'||(FEEDF==='ok'&&e.ok)||(FEEDF==='no'&&!e.ok)).slice().reverse();
@@ -1354,7 +1366,7 @@ function activityUI(){
   for(let i=0;i<N;i++){const s=slice[i-(N-slice.length)],b=bars[i];
     if(s&&active){b.style.height=Math.max(6,Math.round((s.tps/mx)*100))+'%';b.className=s.thinking?'think':'';b.title=(s.thinking?'thinking ':'')+s.tps+' t/s';}
     else{b.style.height='6%';b.className='';b.removeAttribute('title');}}
-  setText('eqcapR',active?(ph==='thinking'?'🧠 reasoning':'⚡ answering')+' · peak '+mx.toFixed(1)+' t/s':(a.server_up?'idle between questions':'server offline'));
+  setText('eqcapR',active?(ph==='thinking'?'reasoning':'answering')+' · peak '+mx.toFixed(1)+' t/s':(a.server_up?'idle between questions':'server offline'));
   const i=lv.i||0,n=lv.n||0,el=lv.elapsed_s;
   $('progVal').textContent=i+'/'+n;
   if(running&&i>0&&n>i&&el)$('etaFoot').textContent='ETA '+fmtDur((el/i)*(n-i));
@@ -1366,13 +1378,13 @@ async function runTest(){
   $('runMsg').textContent='starting…';$('runMsg').style.color='var(--mut)';
   const body={benchmark:$('rBench').value,n:$('rN').value,mode:RMODE,tag:$('rTag').value};
   const r=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-  $('runMsg').textContent=r.ok?('▶ running '+r.started.tag+' '+r.started.mode+' N='+r.started.n):('⚠ '+r.error);
+  $('runMsg').textContent=r.ok?('▶ running '+r.started.tag+' '+r.started.mode+' N='+r.started.n):(r.error);
   $('runMsg').style.color=r.ok?'var(--ok)':'var(--dang)';pulse();
 }
 async function stopTest(){await fetch('/api/run/stop',{method:'POST'});$('runMsg').textContent='stopped';toast('Run stop requested');pulse()}
 async function startServer(){$('srvMsg').textContent='starting (~1 min)…';
   const r=await fetch('/api/server/start',{method:'POST'}).then(r=>r.json());
-  $('srvMsg').textContent=r.ok?(r.already?'already up':'loading model…'):('⚠ '+r.error);}
+  $('srvMsg').textContent=r.ok?(r.already?'already up':'loading model…'):(r.error);}
 function stopAll(){if(!confirm('Stop ALL running tests/chains?'))return;fetch('/api/stop-all',{method:'POST'}).then(r=>r.json()).then(d=>{$('srvMsg').textContent='stopped: '+((d.killed||[]).join(', ')||'nothing was running');toast('Stopped all tests');pulse();});}
 function killServer(){if(!confirm('Force-kill the model server? Next run reloads the model (~1 min).'))return;fetch('/api/server/stop',{method:'POST'}).then(()=>{$('srvMsg').textContent='server killed';toast('Server killed');setTimeout(pulse,800);});}
 
@@ -1399,7 +1411,7 @@ function renderDet(){
   if(q)rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
   $('detBody').innerHTML=rows.length?rows.map(r=>isHB?hbRow(r):mcqRow(r)).join(''):'<div class="muted">no questions match</div>';
 }
-function copyWrong(){const wrong=DET.filter(r=>!r.ok&&!DET._hb);if(!wrong.length){toast('No wrong answers 🎉');return}copy(JSON.stringify(wrong,null,2),wrong.length+' wrong answers copied');}
+function copyWrong(){const wrong=DET.filter(r=>!r.ok&&!DET._hb);if(!wrong.length){toast('No wrong answers');return}copy(JSON.stringify(wrong,null,2),wrong.length+' wrong answers copied');}
 function showDetailRows(title,rows,focusI){
   DET=rows||[];DET._hb=DET[0]&&DET[0].criteria!==undefined;
   $('detTitle').textContent=title+(DET._hb?' · HealthBench scoring':' · questions');
@@ -1421,7 +1433,7 @@ function mcqText(r){const opts=r.options||{};const ol=Object.keys(opts).map(k=>k
 function mcqRow(r){
   const opts=r.options||{};
   const ol=Object.keys(opts).map(k=>{const hl=k===r.gold?'background:rgba(12,206,107,.12);border-color:rgba(12,206,107,.45)':(k===r.pred?'background:rgba(255,77,79,.10);border-color:rgba(255,77,79,.45)':'');
-    return `<div style="border:1px solid #232326;border-radius:6px;padding:5px 9px;margin:3px 0;font-size:12px;${hl}"><b>${esc(k)}.</b> ${esc(opts[k])}${k===r.gold?' ✅':''}${(k===r.pred&&k!==r.gold)?' ⟵ model':''}</div>`;}).join('');
+    return `<div style="border:1px solid #232326;border-radius:6px;padding:5px 9px;margin:3px 0;font-size:12px;${hl}"><b>${esc(k)}.</b> ${esc(opts[k])}${k===r.gold?' ✓':''}${(k===r.pred&&k!==r.gold)?' ⟵ model':''}</div>`;}).join('');
   return `<details data-i="${r.i}" style="border:1px solid #1d1d20;border-radius:10px;padding:10px 12px;margin:8px 0"><summary style="cursor:pointer;display:flex;align-items:center;gap:8px"><span class="mk ${r.ok?'ok':'no'}">${r.ok?'✓':'✗'}</span> <b>Q${r.i}</b> — model <b>${esc(r.pred)}</b> · gold <b>${esc(r.gold)}</b><button class="iconbtn xs" style="margin-left:auto" onclick="event.preventDefault();event.stopPropagation();copy(mcqText(DET[${DET.indexOf(r)}]),'Q${r.i} copied')">⧉ copy full</button></summary><div style="margin:8px 0;font-size:13px;line-height:1.55">${esc(r.question)}</div>${ol}${timingLine(r)}<div style="margin-top:8px"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">model output (full)</div><pre class="ans" style="max-height:300px">${esc(r.answer||'')}</pre></div></details>`;
 }
 function hbRow(r){
@@ -1454,7 +1466,7 @@ async function chatStatus(){try{const s=await fetch('/api/server/status').then(r
 function chatExample(b){const i=$('chatInput');i.value=b.textContent;chatAutogrow(i);i.focus();}
 function chatEmpty(){const ex=['Explain how a hash map works, with a worked example.','Write a function that returns the nth Fibonacci number.','What trade-offs separate TCP from UDP?'];
   const m=(META&&META.model)?esc(META.model):'the model';
-  return `<div class="chatempty"><h3>Chat with ${m}</h3><p class="muted">Your local model, served on the OpenAI-compatible endpoint. Toggle 🧠 thinking for chain-of-thought reasoning.</p><div class="exq">${ex.map(q=>`<button onclick="chatExample(this)">${esc(q)}</button>`).join('')}</div></div>`;}
+  return `<div class="chatempty"><h3>Chat with ${m}</h3><p class="muted">Your local model, served on the OpenAI-compatible endpoint. Toggle thinking for chain-of-thought reasoning.</p><div class="exq">${ex.map(q=>`<button onclick="chatExample(this)">${esc(q)}</button>`).join('')}</div></div>`;}
 function mdRender(t){try{return DOMPurify.sanitize(marked.parse(t||''));}catch(e){return esc(t||'').replace(/\n/g,'<br>');}}
 function splitThink(raw){const o=raw.search(/<think>/i);if(o<0)return {think:'',answer:raw};
   const open=raw.match(/<think>/i)[0];const after=raw.slice(o+open.length);const c=after.search(/<\/think>/i);
@@ -1462,13 +1474,13 @@ function splitThink(raw){const o=raw.search(/<think>/i);if(o<0)return {think:'',
   return {think:after.slice(0,c),answer:(raw.slice(0,o)+after.slice(c+close.length))};}
 function chatBotInner(m){const sp=m.streaming?splitThink(m.raw):{think:m.think,answer:m.answer};
   let h='';const ans=(sp.answer||'').trim();
-  if(sp.think&&sp.think.trim())h+=`<details class="reason"${(m.streaming&&!ans)?' open':''}><summary>🧠 reasoning${(m.streaming&&!ans)?' · thinking…':''}</summary><div class="rbody">${esc(sp.think.trim())}</div></details>`;
+  if(sp.think&&sp.think.trim())h+=`<details class="reason"${(m.streaming&&!ans)?' open':''}><summary>reasoning${(m.streaming&&!ans)?' · thinking…':''}</summary><div class="rbody">${esc(sp.think.trim())}</div></details>`;
   h+=ans?mdRender(ans):(m.streaming?'<span class="cursor"></span>':'');
   return h;}
 function chatBubble(m){if(m.role==='user')return `<div class="cmsg user"><div class="av">you</div><div class="body">${esc(m.content).replace(/\n/g,'<br>')}</div></div>`;
   const sid=m.streaming?' id="cmsg-stream"':'';
   return `<div class="cmsg bot"${sid}><div class="av">ai</div><div class="body">${chatBotInner(m)}</div></div>`+chatMeta(m);}
-function chatMeta(m){if(m.streaming||!m.dt)return '';return `<div class="cmeta">${m.toks||0} tok · ${m.dt.toFixed(1)}s · ${(m.toks/Math.max(m.dt,0.1)).toFixed(1)} t/s${(m.think&&m.think.trim())?' · 🧠 reasoned':''}</div>`;}
+function chatMeta(m){if(m.streaming||!m.dt)return '';return `<div class="cmeta">${m.toks||0} tok · ${m.dt.toFixed(1)}s · ${(m.toks/Math.max(m.dt,0.1)).toFixed(1)} t/s${(m.think&&m.think.trim())?' · reasoned':''}</div>`;}
 function chatRender(){const c=$('chatmsgs');if(!CHAT.msgs.length){c.innerHTML=chatEmpty();return;}c.innerHTML=CHAT.msgs.map(chatBubble).join('');chatDecorate();chatScroll();}
 function chatUpdateStreaming(bot){const el=document.querySelector('#cmsg-stream .body');if(!el)return;el.innerHTML=chatBotInner(bot);chatDecorate();const dt=(performance.now()-bot.t0)/1000;const e=$('chatStatus');if(e){e.textContent='generating · '+bot.toks+' tok · '+(bot.toks/Math.max(dt,0.1)).toFixed(1)+' t/s';e.style.color='var(--mut)';}chatScroll(true);}
 function chatDecorate(){document.querySelectorAll('#chatmsgs pre code').forEach(c=>{if(c.dataset.hl)return;c.dataset.hl=1;try{if(window.hljs)hljs.highlightElement(c);}catch(e){}});
@@ -1487,13 +1499,13 @@ async function chatSend(){
   CHAT.abort=new AbortController();
   try{
     const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:CHAT.abort.signal});
-    if(!resp.ok||!resp.body){let err='request failed';try{err=(await resp.json()).error||err;}catch(e){}bot.raw='⚠ '+err;}
+    if(!resp.ok||!resp.body){let err='request failed';try{err=(await resp.json()).error||err;}catch(e){}bot.raw='error: '+err;}
     else{const reader=resp.body.getReader();const dec=new TextDecoder();let buf='',last=0;
       while(true){const {value,done}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});
         let idx;while((idx=buf.indexOf('\n\n'))>=0){const ln=buf.slice(0,idx).trim();buf=buf.slice(idx+2);
-          if(!ln.startsWith('data:'))continue;try{const o=JSON.parse(ln.slice(5).trim());if(o.t){bot.raw+=o.t;bot.toks++;}if(o.error)bot.raw+='\n\n⚠ '+o.error;}catch(e){}}
+          if(!ln.startsWith('data:'))continue;try{const o=JSON.parse(ln.slice(5).trim());if(o.t){bot.raw+=o.t;bot.toks++;}if(o.error)bot.raw+='\n\nerror: '+o.error;}catch(e){}}
         const now=performance.now();if(now-last>55){last=now;chatUpdateStreaming(bot);}}}
-  }catch(e){if(e.name!=='AbortError')bot.raw+='\n\n⚠ '+e;}
+  }catch(e){if(e.name!=='AbortError')bot.raw+='\n\nerror: '+e;}
   const sp=splitThink(bot.raw);bot.think=sp.think;bot.answer=sp.answer?sp.answer:(sp.think?'':bot.raw);
   if(!(bot.answer||'').trim()&&!(bot.think||'').trim())bot.answer='_(no output)_';
   bot.streaming=false;bot.dt=(performance.now()-bot.t0)/1000;
@@ -1529,7 +1541,7 @@ function closeSetup(){$('setupModal').style.display='none';}
 function renderRefList(){
   const benches=Object.keys(SETUP.refs).filter(b=>(SETUP.refs[b]||[]).length);
   if(!benches.length){$('refList').innerHTML='<div class="muted" style="font-size:12px">No reference baselines yet — add one above, or leave empty to just compare your own runs.</div>';return;}
-  $('refList').innerHTML=benches.map(b=>`<div class="refbench">${esc(nice(b))}</div>`+SETUP.refs[b].map((r,i)=>`<div class="refrow"><span class="tag ${r.kind==='frontier'?'pur':(r.kind==='chance'?'':'blue')}">${esc(r.kind)}</span><b>${esc(r.label)}</b><span class="mono muted">${r.acc}%</span><button class="rm" title="remove" onclick="setupDelRef('${esc(b)}',${i})">✕</button></div>`).join('')).join('');
+  $('refList').innerHTML=benches.map(b=>`<div class="refbench">${esc(nice(b))}</div>`+SETUP.refs[b].map((r,i)=>`<div class="refrow"><span class="tag ${r.kind==='frontier'?'pur':(r.kind==='chance'?'':'blue')}">${esc(r.kind)}</span><b>${esc(r.label)}</b><span class="mono muted">${r.acc}%</span><button class="rm" title="remove" onclick="setupDelRef('${esc(b)}',${i})" aria-label="close">×</button></div>`).join('')).join('');
 }
 function setupAddRef(){
   const b=$('refBench').value,lbl=($('refLabel').value||'').trim(),acc=parseFloat($('refAcc').value),kind=$('refKind').value;
@@ -1560,8 +1572,8 @@ async function loadBench(){
   if(!BENCH.data.fetching&&BENCH.timer){clearInterval(BENCH.timer);BENCH.timer=null;loadAll();}
 }
 function benchItem(b,fetching){
-  const fit=b.fit==='code'?'<span class="tag" title="generates code, executed against tests (pass@1)">⚙ code</span>':'';
-  const base=b.baselines?`<span class="tag pur" title="${b.baselines} published frontier baselines ship for this benchmark">★ baselines</span>`:'';
+  const fit=b.fit==='code'?'<span class="tag" title="generates code, executed against tests (pass@1)">code</span>':'';
+  const base=b.baselines?`<span class="tag pur" title="${b.baselines} published frontier baselines ship for this benchmark">baselines</span>`:'';
   return `<div class="benchrow"><div style="min-width:0;flex:1"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="bn">${esc(b.name)}</span><span class="dom">${esc(b.domain)}</span>${fit}${base}</div>
     <div class="muted" style="font-size:11.5px;margin-top:2px;line-height:1.45">${esc(b.desc||'')}</div></div>
     <span class="br">${b.present?'<span class="tag ok">✓ installed</span>':`<button class="btn g" ${fetching?'disabled':''} onclick="fetchBench('${esc(b.key)}')">fetch</button>`}</span></div>`;
@@ -1571,7 +1583,7 @@ function renderBench(){
   const cur=av.filter(b=>b.tier==='current'),leg=av.filter(b=>b.tier!=='current');
   const curMissing=cur.filter(b=>!b.present).length;
   $('benchStatus').innerHTML=fetching?'<span class="livedot"></span> fetching… (files appear as they finish)':(av.filter(b=>b.present).length+' of '+av.length+' installed · '+curMissing+' current not yet fetched');
-  $('benchAll').disabled=fetching||!curMissing;$('benchAll').textContent=curMissing?('⬇ Fetch current set ('+curMissing+')'):'Current set installed';
+  $('benchAll').disabled=fetching||!curMissing;$('benchAll').textContent=curMissing?('Fetch current set ('+curMissing+')'):'Current set installed';
   const sec=(label,arr)=>arr.length?`<div class="refbench" style="margin-top:12px">${label}</div>`+arr.map(b=>benchItem(b,fetching)).join(''):'';
   $('benchList').innerHTML=sec('Current — discriminating for mid-2026 models',cur)+sec('Legacy / saturated — small-model regression only',leg);
   const man=d.manual||[];
@@ -1609,14 +1621,14 @@ function tieredOptions(keys,cur,thirdLabel){
   keys.forEach(b=>{const t=regTier(b);g[(t==='current')?'current':(t==='legacy'?'legacy':'other')].push(b);});
   const ord=b=>(REGMAP[b]&&REGMAP[b].ord!=null)?REGMAP[b].ord:999;
   const og=(lab,arr)=>{if(!arr.length)return '';arr.sort((a,b)=>ord(a)-ord(b));
-    return '<optgroup label="'+lab+'">'+arr.map(b=>'<option value="'+esc(b)+'"'+(b===cur?' selected':'')+'>'+esc(regName(b))+((REGMAP[b]&&REGMAP[b].fit==='code')?' ⚙':'')+'</option>').join('')+'</optgroup>';};
+    return '<optgroup label="'+lab+'">'+arr.map(b=>'<option value="'+esc(b)+'"'+(b===cur?' selected':'')+'>'+esc(regName(b))+((REGMAP[b]&&REGMAP[b].fit==='code')?' ·code':'')+'</option>').join('')+'</optgroup>';};
   return og('current (recommended)',g.current)+og('legacy / saturated',g.legacy)+og(thirdLabel||'other',g.other);
 }
 function fillRunMenu(){
   const rb=$('rBench');if(!rb)return;const cur=rb.value,opts=(META.benchmarks||[]),sig=opts.join(',');
   if(rb.dataset.sig===sig){if(cur&&opts.includes(cur))rb.value=cur;return;}
   rb.dataset.sig=sig;
-  rb.innerHTML=opts.length?tieredOptions(opts,cur,'other / custom'):'<option value="">no benchmarks — fetch from ⬇ Benchmarks</option>';
+  rb.innerHTML=opts.length?tieredOptions(opts,cur,'other / custom'):'<option value="">no benchmarks — fetch from Benchmarks</option>';
   if(cur&&opts.includes(cur))rb.value=cur;updateRunDesc();
 }
 function updateRunDesc(){const d=$('runDesc'),b=($('rBench')&&$('rBench').value);if(d)d.textContent=b?regDesc(b):'';}
@@ -1815,5 +1827,5 @@ if __name__ == "__main__":
     threading.Thread(target=_sample_metrics, daemon=True).start()
     print("benchy -> http://127.0.0.1:%d" % port, flush=True)
     if ALLOW_CODE_EXEC:
-        print("⚠ BENCHY_ALLOW_CODE_EXEC is set — code-generation benchmarks will EXECUTE model-written code on this host.", flush=True)
+        print("WARNING: BENCHY_ALLOW_CODE_EXEC is set — code-generation benchmarks will EXECUTE model-written code on this host.", flush=True)
     ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
