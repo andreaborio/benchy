@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use benchy in your work, please cite it as below."
+title: benchy
+abstract: "A multi-benchmark test suite and live dashboard for local medical LLMs, built to exercise OpenAI-compatible inference servers such as ds4 / DwarfStar."
+type: software
+authors:
+  - family-names: Borio
+    given-names: Andrea
+license: MIT
+date-released: "2026-06-09"
+repository-code: "https://github.com/andreaborio/benchy"
+keywords:
+  - medical-llm
+  - benchmark
+  - evaluation
+  - healthbench
+  - deepseek-v4-flash
+  - ds4
+references:
+  - type: software
+    title: "ds4 / DwarfStar — DeepSeek-V4-Flash inference engine"
+    authors:
+      - family-names: Sanfilippo
+        given-names: Salvatore
+    notes: "Separate project (antirez); benchy consumes its OpenAI-compatible API. Cite the ds4 project directly."

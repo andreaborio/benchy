@@ -1,0 +1,53 @@
+# Benchmark datasets — fetched via fetch_benchmarks.py. Each dataset has its OWN
+# license and source (see DATA.md); they are NOT redistributed with this repo.
+/data/
+
+# Eval outputs (runs, per-question details, live stream, metrics, server log)
+/results/
+
+# Secrets — never commit API keys
+.apikey
+*.key
+*.pem
+
+# Model weights / imatrices (large, not part of the suite)
+*.gguf
+*.dat
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# BeepMed-internal operational scripts — machine-specific hardcoded paths and
+# ds4/imatrix-specific; NOT part of the generic benchy suite. Excluded so a clean
+# `git add .` ships only the portable core. Un-ignore individually after cleaning paths.
+build_medical_imatrix.py
+analyze_profile.py
+run_medimatrix_ab.sh
+run_sweep.sh
+cache_sweep.sh
+next_eval.sh
+healthbench_chain.sh
+profile_medical.sh
+test_imatrix_overhead.sh
+
+# Living docs / internal artifacts from the BeepMed work (not the public suite)
+MEDICAL_IMATRIX.md
+DASHBOARD_AUDIT.md
+DASHBOARD_PLAN.md
+medical_imatrix_prompts.txt
+
+# Editor/backup cruft
+*.bak
+*.pre_polish
+*_broken.py
