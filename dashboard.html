@@ -1,0 +1,1095 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>benchy · Benchmark Explorer</title>
+<!-- third-party assets are vendored (static/vendor/, pinned versions — see NOTICE) and fonts
+     are the system stacks: the dashboard makes zero external requests and works fully offline -->
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/purify.min.js"></script>
+<link rel="stylesheet" href="/static/vendor/github-dark.min.css">
+<script src="/static/vendor/highlight.min.js"></script>
+<style>
+@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+:root{--bg:#000;--card:#0c0c0d;--card2:#0f0f11;--bd:#1d1d20;--bd2:#2a2a2e;--ink:#ededed;--mut:#8a8a8a;--mut2:#8a8a8a;
+--acc:#0070f3;--acc2:#3291ff;--ok:#0cce6b;--teal:#50e3c2;--warn:#f5a623;--dang:#ff4d4f;--pur:#8a63d2;--pur2:#a855f7}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,system-ui,sans-serif;font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+a{color:var(--acc2);text-decoration:none}a:hover{text-decoration:underline}
+.nav{position:sticky;top:0;z-index:30;background:rgba(0,0,0,.66);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:18px;padding:0 22px;height:56px}
+.brand{font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:9px}
+.brand .logo{width:22px;height:22px;border-radius:6px;background:var(--ink);position:relative}
+.brand .logo::after{content:'';position:absolute;inset:5px;border-radius:4px;background:#000;opacity:.55}
+.navlinks{display:flex;gap:2px}.navlinks a{color:var(--mut);padding:7px 12px;border-radius:8px;font-weight:500;font-size:13px;transition:.18s}
+.navlinks a:hover{color:var(--ink);background:#141416}.navlinks a.on{color:var(--ink);background:#18181b}
+.livebadge{margin-left:auto;display:none;align-items:center;gap:9px;font-size:12px;color:var(--ok);background:rgba(12,206,107,.08);border:1px solid rgba(12,206,107,.25);padding:5px 12px;border-radius:99px;font-weight:600}
+.livebadge.run{display:flex}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(12,206,107,.5);animation:pp 1.4s infinite}
+@keyframes pp{0%{box-shadow:0 0 0 0 rgba(12,206,107,.5)}70%{box-shadow:0 0 0 8px rgba(12,206,107,0)}100%{box-shadow:0 0 0 0 rgba(12,206,107,0)}}
+.wrap{position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:26px 22px 90px}
+.hl{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+h1{font-size:24px;font-weight:600;letter-spacing:-.03em;margin:0;color:var(--ink)}
+.sub{color:var(--mut);margin:5px 0 0}
+.modelcard{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 4px}
+.mcchip{font-size:11.5px;color:var(--mut);background:#0d0d0f;border:1px solid var(--bd);border-radius:7px;padding:5px 9px}
+.mcchip b{color:var(--ink);font-weight:600}
+.btn{background:var(--ink);color:#000;border:0;border-radius:9px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;transition:.16s}
+.btn:hover{background:#fff}
+.btn.g{background:transparent;color:var(--ink);border:1px solid var(--bd2)}.btn.g:hover{background:#161618;border-color:#3a3a40}
+.btn.dang{background:transparent;color:#ff8b8d;border:1px solid rgba(255,77,79,.32)}.btn.dang:hover{background:#241113;border-color:rgba(255,77,79,.5)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
+@media(max-width:860px){.g4{grid-template-columns:1fr 1fr}.g3,.g2{grid-template-columns:1fr}}
+.card{position:relative;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px}
+.card h3{margin:0 0 3px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
+.ch{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kpi .v{font-size:30px;font-weight:800;letter-spacing:-.02em;margin-top:6px;line-height:1.05}.kpi .d{color:var(--mut);font-size:12px;margin-top:5px}
+.sec{margin-top:30px}.sec>h2{font-size:16px;font-weight:700;margin:0 0 13px;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
+.sec>h2 .hint{font-weight:500;font-size:12px;color:var(--mut2)}
+.tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;background:#161618;border:1px solid var(--bd2);color:var(--mut)}
+.tag.ok{color:var(--ok);border-color:rgba(12,206,107,.3);background:rgba(12,206,107,.07)}.tag.warn{color:var(--warn);border-color:rgba(245,166,35,.3);background:rgba(245,166,35,.07)}.tag.blue{color:var(--acc2);border-color:rgba(50,145,255,.3);background:rgba(50,145,255,.07)}.tag.dang{color:var(--dang);border-color:rgba(255,77,79,.3);background:rgba(255,77,79,.07)}.tag.pur{color:#c4a4ff;border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.08)}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}th:hover{color:var(--ink)}td.n,th.n{text-align:right}tr:hover td{background:#0c0c0e}
+th .thsort{background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{font-size:12px;color:var(--mut);background:#101012;border:1px solid var(--bd);border-radius:8px;padding:6px 10px;cursor:pointer;transition:.15s}.chip:hover{border-color:var(--bd2);color:var(--ink)}.chip b{color:var(--ink)}
+.callout{border:1px solid rgba(245,166,35,.28);background:rgba(245,166,35,.05);border-radius:12px;padding:13px 16px;color:#e9d3a4;font-size:12.5px;line-height:1.55}.callout b{color:var(--warn)}
+.barwrap{display:grid;grid-template-columns:210px 1fr 118px;align-items:center;gap:12px;margin:9px 0}
+.barwrap .lab{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.barwrap .lab small{color:var(--mut)}
+.track{position:relative;height:22px;background:#161618;border-radius:7px;overflow:hidden}
+.track>.fill{position:absolute;top:0;left:0;height:100%;border-radius:7px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.track>.ci{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(45deg,rgba(255,255,255,.16),rgba(255,255,255,.16) 5px,rgba(255,255,255,.06) 5px,rgba(255,255,255,.06) 10px);border-left:1px solid rgba(255,255,255,.4);border-right:1px solid rgba(255,255,255,.4)}
+.barwrap .pv{text-align:right;font-weight:600;font-size:12.5px}.barwrap .pv small{color:var(--mut);font-weight:500}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+input,select{background:#0b0b0d;border:1px solid var(--bd2);color:var(--ink);border-radius:9px;padding:8px 11px;font-size:13px;font-family:inherit;outline:none;transition:.15s}
+input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(0,112,243,.18)}
+input::placeholder{color:var(--mut2)}
+.seg{display:flex;background:#0b0b0d;border:1px solid var(--bd2);border-radius:9px;overflow:hidden}
+.seg button{background:transparent;border:0;color:var(--mut);padding:7px 13px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s}.seg button.on{background:#1c1c20;color:var(--ink)}
+.seg.sm button{padding:4px 10px;font-size:12px}
+.muted{color:var(--mut)}.foot{color:var(--mut2);font-size:12px;margin-top:34px;line-height:1.6}
+canvas{max-height:280px}
+.iconbtn{background:#141416;border:1px solid var(--bd2);color:var(--mut);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s;display:inline-flex;align-items:center;gap:5px}
+.iconbtn:hover{color:var(--ink);border-color:#3a3a40;background:#1a1a1e}
+.iconbtn.xs{padding:2px 6px;font-size:11px}
+/* live section */
+.glowcard{position:relative;border-radius:16px}
+.glowcard::before{content:'';position:absolute;inset:-1.5px;border-radius:17px;padding:1.5px;background:conic-gradient(from var(--ang),transparent 0 58%,var(--acc2) 72%,var(--teal) 82%,transparent 92%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:spin 4.5s linear infinite;opacity:.9}
+@keyframes spin{to{--ang:360deg}}
+.live-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.live-meta{font-size:13px;color:var(--mut)}.live-meta b{color:var(--ink)}
+.phase{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:99px;border:1px solid var(--bd2);background:#0b0b0d;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
+.phase .phdot{width:8px;height:8px;border-radius:50%;background:var(--mut)}
+.phase[data-p=generating]{color:var(--teal);border-color:rgba(80,227,194,.4);background:rgba(80,227,194,.08)}.phase[data-p=generating] .phdot{background:var(--teal);animation:pp 1.1s infinite}
+.phase[data-p=thinking]{color:#c4a4ff;border-color:rgba(168,85,247,.4);background:rgba(168,85,247,.10)}.phase[data-p=thinking] .phdot{background:var(--pur2);animation:pp 1.1s infinite}
+.phase[data-p=prefill]{color:var(--warn);border-color:rgba(245,166,35,.4);background:rgba(245,166,35,.08)}.phase[data-p=prefill] .phdot{background:var(--warn);animation:pp 1.1s infinite}
+.phase[data-p=done]{color:var(--ok);border-color:rgba(12,206,107,.4);background:rgba(12,206,107,.08)}.phase[data-p=done] .phdot{background:var(--ok)}
+.metric{background:#0a0a0c;border:1px solid var(--bd);border-radius:11px;padding:13px 14px}
+.metric .mlabel{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
+.metric .mval{font-size:27px;font-weight:800;letter-spacing:-.02em;margin-top:3px;line-height:1}.metric .mval small{font-size:13px;font-weight:600;color:var(--mut);margin-left:4px}
+.metric .mfoot{font-size:11.5px;color:var(--mut2);margin-top:5px}
+.eq{display:flex;align-items:flex-end;gap:3px;height:66px;margin-top:16px}
+.eq i{flex:1;min-width:2px;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--teal),rgba(80,227,194,.12));height:6%;transition:height .4s cubic-bezier(.2,.8,.2,1)}
+.eq i.think{background:linear-gradient(180deg,var(--pur2),rgba(168,85,247,.12))}
+.eqcap{display:flex;justify-content:space-between;font-size:11px;color:var(--mut2);margin-top:6px}
+.accbig{font-size:24px;font-weight:800;letter-spacing:-.02em}
+.feedcard{overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.feed{display:flex;flex-direction:column;gap:7px;margin-top:10px;overflow:auto;flex:1;min-height:0;padding-right:3px}
+.qadonut{display:flex;align-items:center;gap:18px;padding:12px 2px 14px;border-bottom:1px solid var(--bd)}
+.qadonut .dchart{position:relative;width:92px;height:92px;flex:0 0 auto}
+.qadonut .dctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.qadonut .dctr b{font-size:21px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.qadonut .dctr small{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.qadonut .dleg{display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+.qadonut .dleg .li{display:flex;align-items:center;gap:8px}
+.qadonut .dleg .sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
+.qrow{flex:0 0 auto;border:1px solid var(--bd);border-radius:10px;background:#0a0a0c;font-size:12.5px;overflow:hidden;transition:border-color .15s}
+.qrow:hover{border-color:var(--bd2)}
+.qrow.ok{border-left:3px solid var(--ok)}.qrow.no{border-left:3px solid var(--dang)}
+.qrow .qh{display:flex;align-items:center;gap:8px;padding:9px 11px}
+.qrow .qh-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.qrow .qbody{display:none;padding:0 11px 11px;border-top:1px solid var(--bd)}
+.qrow.open .qbody{display:block}
+.qrow .qq{color:var(--ink);line-height:1.5;margin:9px 0 7px}
+.qrow .qopt{color:var(--mut);line-height:1.5;font-size:12px}
+.qrow pre.ans{margin:8px 0 0;background:#060607;border:1px solid var(--bd);border-radius:8px;padding:9px 10px;font-size:11.5px;color:#bdbdc4;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto}
+.mk{width:18px;height:18px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex:0 0 auto}
+.mk.ok{background:rgba(12,206,107,.15);color:var(--ok)}.mk.no{background:rgba(255,77,79,.15);color:var(--dang)}
+/* reveal */
+.sec,.hl{animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+/* toasts */
+#toasts{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center}
+#errbar{display:none;position:fixed;top:0;left:0;right:0;z-index:200;background:#2a0d0f;border-bottom:1px solid rgba(255,77,79,.5);color:#ff9b9d;font-size:12.5px;font-weight:500;padding:7px 16px;text-align:center}
+.toast{background:#16161a;border:1px solid var(--bd2);color:var(--ink);padding:9px 15px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;transform:translateY(10px);transition:.28s}
+.toast.in{opacity:1;transform:none}.toast.bad{border-color:rgba(255,77,79,.5);color:#ff9b9d}
+/* modal */
+#detModal,#setupModal,#benchModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(4px);z-index:100;padding:40px 20px;overflow:auto}
+#detModal .box,#setupModal .box,#benchModal .box{max-width:960px;margin:0 auto;background:#0d0d0f;border:1px solid #262629;border-radius:16px;padding:20px 22px}
+#detModal .box:focus,#setupModal .box:focus,#benchModal .box:focus{outline:none}
+.benchrow{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 10px;border:1px solid var(--bd);border-radius:9px;margin:6px 0;background:#0a0a0c}
+.benchrow .bn{font-weight:600}.benchrow .br{margin-left:auto;display:flex;align-items:center;gap:8px}
+.benchrow .dom{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut2)}
+#refList .refrow{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:6px 9px;border:1px solid var(--bd);border-radius:8px;margin:5px 0;background:#0a0a0c}
+#refList .refrow .rm{margin-left:auto;cursor:pointer;color:var(--mut2);border:0;background:none;font-size:14px}#refList .refrow .rm:hover{color:var(--dang)}
+#refList .refbench{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:12px 0 2px}
+.dtoolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:10px 0 14px}
+/* debug drawer */
+.dbgbtn{position:fixed;right:18px;bottom:18px;z-index:90;background:#121214;border:1px solid var(--bd2);color:var(--mut);border-radius:10px;padding:9px 13px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);transition:.15s}
+.dbgbtn:hover{color:var(--ink);border-color:#3a3a40}
+.dbg{position:fixed;right:18px;bottom:62px;z-index:91;width:min(560px,calc(100vw - 36px));height:min(440px,60vh);background:#0a0a0c;border:1px solid var(--bd2);border-radius:13px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:none;flex-direction:column;overflow:hidden}
+.dbg.open{display:flex}
+.dbgh{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--bd)}
+.dbg pre{margin:0;flex:1;overflow:auto;padding:12px 14px;font-size:11.5px;line-height:1.5;color:#b6b6bd;white-space:pre-wrap;word-break:break-word}
+/* first-run checklist */
+.frsteps{margin:12px 0 2px;padding-left:22px;font-size:13.5px;line-height:1.65}
+.frsteps li{margin:7px 0}.frsteps b{color:var(--ink)}
+/* experiment band */
+.exphead{display:flex;justify-content:space-between;gap:22px;flex-wrap:wrap}
+.expk{font-size:11px;letter-spacing:.12em;color:var(--mut2);font-weight:700}
+.exptitle{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:17px;font-weight:700}
+.expmetrics{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+.expmetric .expml{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.expmetric .expmv{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-top:3px;line-height:1}
+.expprog{display:flex;align-items:center;gap:12px;margin-top:16px}
+.expbar{flex:1;height:8px;background:#161618;border-radius:99px;overflow:hidden}
+.expbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--teal));border-radius:99px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+/* latency bars + system + 2-col live */
+.eq.yellow i{background:linear-gradient(180deg,var(--warn),rgba(245,166,35,.14))}
+.livegrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.06fr);gap:14px;align-items:start}
+@media(max-width:860px){.livegrid{grid-template-columns:1fr}}
+.livestack{display:flex;flex-direction:column;gap:14px}
+.sysbig{font-size:16px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}
+.syschart{position:relative;height:120px;margin-top:8px}.syschart canvas{position:absolute;inset:0}
+.syslegend{display:flex;gap:13px;font-size:10.5px;color:var(--mut2);margin-top:6px;flex-wrap:wrap}
+.syslegend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.qrow .qtime{font-size:11px;color:var(--mut2);margin-top:7px}
+.qrow .qh{cursor:pointer}
+.blink{animation:blinkv 1.25s ease-in-out infinite}@keyframes blinkv{0%,100%{opacity:1}50%{opacity:.38}}
+.livedot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-left:8px;vertical-align:middle;box-shadow:0 0 0 0 rgba(12,206,107,.5);animation:pp 1.25s infinite}
+.envstrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:16px 0 2px}
+.envstrip .es{font-size:11px;color:var(--mut2);background:#0b0b0d;border:1px solid var(--bd);border-radius:6px;padding:3px 8px;cursor:pointer;transition:.15s;white-space:nowrap}
+.envstrip .es:hover{color:var(--ink);border-color:var(--bd2)}.envstrip .es b{color:var(--mut)}
+/* chat console */
+.chatbtn{position:fixed;left:18px;bottom:18px;z-index:90;background:#161618;color:var(--ink);border:1px solid var(--bd2);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4);transition:.15s;display:flex;align-items:center;gap:7px}
+.chatbtn:hover{background:#1c1c20;border-color:#3a3a40}
+.chatbtn svg{opacity:.7}
+.chatwrap{position:fixed;inset:auto 0 0 0;z-index:95;display:none;justify-content:center;pointer-events:none}
+.chatwrap.open{display:flex}
+.chat{pointer-events:auto;width:min(980px,100%);height:min(78vh,820px);background:#0a0a0c;border:1px solid var(--bd2);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -24px 70px rgba(0,0,0,.65);display:flex;flex-direction:column;overflow:hidden;animation:slideup .28s cubic-bezier(.2,.8,.2,1)}
+.chat.full{width:100%;height:100vh;border-radius:0}
+@keyframes slideup{from{transform:translateY(40px);opacity:.3}to{transform:none;opacity:1}}
+.chathead{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--bd);background:#0a0a0c}
+.chathead .ttl{font-weight:700;display:flex;align-items:center;gap:8px;font-size:14px}
+.chathead .ep{font-size:11px;color:var(--mut2);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.chatmsgs{flex:1;overflow:auto;padding:22px 0}
+.cmsg{max-width:780px;margin:0 auto 18px;padding:0 22px;display:flex;gap:14px}
+.cmsg .av{width:28px;height:28px;border-radius:7px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.cmsg.user .av{background:#1c1c20;color:var(--ink)}
+.cmsg.bot .av{background:#1a1a1c;color:var(--mut);border:1px solid var(--bd2)}
+.cmsg .body{flex:1;min-width:0;line-height:1.62;font-size:14.5px;padding-top:3px}
+.cmsg .body p{margin:0 0 10px}.cmsg .body>*:last-child{margin-bottom:0}
+.cmsg .body pre{background:#060607;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;overflow:auto;position:relative;font-size:12.5px;margin:0 0 10px}
+.cmsg .body code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.cmsg .body :not(pre)>code{background:#161618;border:1px solid var(--bd);border-radius:5px;padding:1px 5px;font-size:12.5px}
+.cmsg .body ul,.cmsg .body ol{margin:0 0 10px;padding-left:22px}.cmsg .body li{margin:3px 0}
+.cmsg .body h1,.cmsg .body h2,.cmsg .body h3{margin:14px 0 8px;font-size:16px}
+.cmsg .body table{margin:0 0 10px}.cmsg .body a{color:var(--acc2)}
+.reason{border:1px solid var(--bd);border-radius:10px;margin:0 0 12px;background:#0c0c0e;overflow:hidden}
+.reason>summary{cursor:pointer;padding:8px 12px;font-size:12px;color:var(--mut);list-style:none;display:flex;align-items:center;gap:7px;user-select:none}
+.reason>summary::-webkit-details-marker{display:none}
+.reason .rbody{padding:0 12px 10px;font-size:12.5px;color:var(--mut);line-height:1.55;white-space:pre-wrap;max-height:280px;overflow:auto}
+.cmeta{max-width:780px;margin:-10px auto 16px;padding:0 22px 0 58px;font-size:11px;color:var(--mut2);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.cursor{display:inline-block;width:7px;height:15px;background:var(--mut);vertical-align:text-bottom;animation:blinkv .9s steps(2) infinite;border-radius:1px}
+.chatcompose{border-top:1px solid var(--bd);padding:10px 16px 13px;display:flex;flex-direction:column;gap:8px;background:#0c0c0e}
+.ccontrols{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--mut)}
+.ccontrols label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.cinput{display:flex;gap:10px;align-items:flex-end}
+.cinput textarea{flex:1;resize:none;max-height:170px;background:#0b0b0d;border:1px solid var(--bd2);border-radius:12px;padding:11px 13px;color:var(--ink);font-family:inherit;font-size:14px;line-height:1.5;outline:none}
+.cinput textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(0,112,243,.18)}
+.csend{flex:0 0 auto;width:40px;height:40px;border-radius:11px;border:0;background:var(--ink);color:#000;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.csend:hover{opacity:.9}.csend:disabled{opacity:.4;cursor:not-allowed}.csend.stop{background:#3a1416;color:#ff8b8d}
+.chatempty{max-width:580px;margin:36px auto;text-align:center;color:var(--mut)}
+.chatempty h3{color:var(--ink);font-size:18px;margin:0 0 8px;text-transform:none;letter-spacing:-.01em}
+.exq{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}
+.exq button{background:#0e0e10;border:1px solid var(--bd2);color:var(--mut);border-radius:9px;padding:9px 12px;font-size:12.5px;cursor:pointer;text-align:left;max-width:250px;line-height:1.4}
+.exq button:hover{color:var(--ink);border-color:#3a3a40}
+.codecopy{position:absolute;top:7px;right:7px;background:#161618;border:1px solid var(--bd2);color:var(--mut);border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;opacity:0;transition:.15s}
+.cmsg .body pre:hover .codecopy{opacity:1}.codecopy:hover{color:var(--ink)}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.001s!important}}
+</style></head><body>
+<div class="wrap">
+<div class="hl"><div>
+  <h1 id="pageTitle">benchy</h1>
+  <p class="sub" id="pageSub">Local LLM benchmark suite — each <b>run</b> (a model / quant / build) is scored across a panel of benchmarks on your own machine.</p>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn g" onclick="openBenchmarks()">Benchmarks</button><button class="btn g" onclick="openSetup()">Setup</button><button class="btn g" onclick="loadAll();pulse()">Refresh</button><button class="btn g" onclick="copyReport(this)">Copy report</button><button class="btn" onclick="location.href='/api/report'">Export</button></div></div>
+<div class="envstrip" id="envstrip"></div>
+
+<!-- FIRST RUN (only while there are no runs yet — replaces the experiment band & A/B card) -->
+<div class="sec" id="firstrun" style="display:none;margin-top:18px"><div class="card">
+  <h3>Get started</h3>
+  <p class="muted" style="font-size:12.5px;margin:9px 0 0;line-height:1.55">No runs yet — three steps to your first benchmark score. This panel disappears once a run lands in <code class="mono">results/runs.jsonl</code>.</p>
+  <ol class="frsteps">
+    <li><b>Fetch a benchmark</b> — <a href="#" onclick="openBenchmarks();return false">open Benchmarks</a> and download a set into <code class="mono">data/</code> (pinned &amp; hash-locked).</li>
+    <li><b>Point or start your OpenAI-compatible server</b> — use <a href="#control">Start server</a> in the Model server card, or launch your own; it is auto-detected on <span class="mono" id="frServer"></span>.</li>
+    <li><b>Run N=25</b> — pick the benchmark in <a href="#control">Run a test</a>, keep N=25, tag it (e.g. <code class="mono">baseline</code>) and hit Run.</li>
+  </ol>
+</div></div>
+
+<!-- EXPERIMENT -->
+<div class="sec" id="experiment" style="margin-top:18px"><div class="card" id="expCard"></div></div>
+
+<!-- PAIRED A/B (McNemar) -->
+<div class="sec" id="paired" style="margin-top:18px"><div class="card">
+  <h3>Paired A/B significance <span class="hint">McNemar on the same questions — the correct test for "does quant A differ from quant B"</span></h3>
+  <div class="toolbar" style="margin:11px 0 0;flex-wrap:wrap;gap:8px;align-items:center">
+    <select id="cmpA" title="run tag A"></select><span class="muted">vs</span><select id="cmpB" title="run tag B"></select>
+    <select id="cmpBench" title="benchmark"></select>
+    <select id="cmpMode" title="reasoning mode"><option value="">any mode</option><option value="thinking">thinking</option><option value="nothink">nothink</option></select>
+    <button class="btn g" onclick="runCompare()">Compare</button>
+  </div>
+  <div id="cmpResult" class="muted" style="font-size:12.5px;margin:12px 0 0;line-height:1.6">Pick two run tags and a benchmark, then Compare — this pairs the two runs question-by-question (a far more powerful test than comparing two independent confidence intervals).</div>
+</div></div>
+
+<!-- CONTROL -->
+<div class="sec" id="control"><div class="grid g2">
+  <div class="card"><h3>Model server</h3>
+    <div class="toolbar" style="margin:11px 0 0"><span class="tag" id="srvPill">checking…</span>
+      <button class="btn g" id="srvBtn" onclick="startServer()">Start server</button>
+      <button class="btn dang" onclick="stopAll()">Stop all tests</button>
+      <button class="btn g" onclick="killServer()" title="force-kill the model server">kill server</button>
+      <span class="muted" id="srvMsg" aria-live="polite" style="font-size:12px"></span></div>
+    <p class="muted" style="font-size:12px;margin:11px 0 0;line-height:1.55">Tag each run (e.g. a model, quant, or build name) so runs compare against your <b id="baselineTagTxt" style="color:var(--pur2)">baseline</b> tag in Accuracy. Add optional reference baselines in <a href="#" onclick="openSetup();return false">Setup</a>.</p></div>
+  <div class="card"><h3>Run a test</h3>
+    <div class="toolbar" style="margin:11px 0 0">
+      <select id="rBench" onchange="rBenchUser=true;updateRunDesc();syncAccToRun()"></select>
+      <input id="rN" type="number" value="25" min="1" style="width:78px" title="N questions">
+      <div class="seg"><button id="segT" class="on" onclick="setMode('thinking')">thinking</button><button id="segN" onclick="setMode('nothink')">nothink</button></div>
+      <input id="rTag" type="text" value="" style="width:150px" placeholder="run tag (e.g. baseline)">
+      <button class="btn" id="runBtn" onclick="runTest()">Run</button>
+      <button class="btn g" id="stopBtn" onclick="stopTest()" style="display:none">Stop</button>
+      <span class="muted" id="runMsg" aria-live="polite" style="font-size:12px"></span></div>
+    <p class="muted" id="runDesc" style="font-size:12px;margin:9px 0 0;min-height:16px;line-height:1.5"></p></div>
+</div></div>
+
+<!-- LIVE -->
+<div class="sec" id="liveSec" style="display:none"><h2>Live run <span class="hint">real-time · ~1.5s</span></h2>
+  <div class="glowcard"><div class="card">
+    <div class="live-head">
+      <span class="phase" id="phasePill" data-p="idle"><span class="phdot"></span><span id="phaseTxt">idle</span></span>
+      <span class="live-meta" id="liveMeta"></span>
+      <button class="iconbtn" style="margin-left:auto" onclick="copyDiag()" title="copy a JSON snapshot of live/sys/activity for debugging">copy diagnostics</button>
+    </div>
+    <div class="grid g3">
+      <div class="metric"><div class="mlabel">decode</div><div class="mval"><span id="tpsVal">—</span><small>t/s</small></div><div class="mfoot" id="tpsFoot">avg —</div></div>
+      <div class="metric"><div class="mlabel">generated</div><div class="mval"><span id="genVal">0</span><small>tok</small></div><div class="mfoot" id="genFoot">current answer</div></div>
+      <div class="metric"><div class="mlabel">progress</div><div class="mval"><span id="progVal">0/0</span></div><div class="mfoot" id="etaFoot">ETA —</div></div>
+    </div>
+    <div class="eq" id="actBars"></div>
+    <div class="eqcap"><span>decode throughput · per-chunk (this answer)</span><span id="eqcapR"></span></div>
+  </div></div>
+  <div class="livegrid" style="margin-top:14px">
+    <div class="livestack">
+      <div class="card"><div class="ch"><h3>Running accuracy</h3><span class="accbig" id="accBig" style="color:var(--ok)">—</span></div>
+        <div class="muted" id="accSub" style="font-size:12px;margin:2px 0 4px"></div><canvas id="accLive" height="118"></canvas></div>
+      <div class="card"><div class="ch"><h3>Latency / question <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· wall-clock s/q · hover to read</span></h3><span class="mono muted" id="latStat" style="font-size:11.5px"></span></div>
+        <canvas id="latLive" height="104"></canvas>
+        <div class="eqcap"><span>per question (oldest→newest)</span><span id="latCapR"></span></div></div>
+    </div>
+    <div class="card feedcard"><div class="ch"><h3>Questions &amp; answers <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500" id="feedCount"></span></h3>
+      <div style="display:flex;gap:8px;align-items:center"><div class="seg sm"><button id="fAll" class="on" onclick="setFeedFilter('all')">all</button><button id="fOk" onclick="setFeedFilter('ok')">correct</button><button id="fNo" onclick="setFeedFilter('no')">wrong</button></div><button class="iconbtn xs" title="open the full detail page (full question, all options, full model output)" onclick="openLiveDetails()">detail</button></div></div>
+      <div class="qadonut"><div class="dchart"><canvas id="qaDonutChart"></canvas><div class="dctr"><b id="qaPct">—</b><small>correct</small></div></div><div class="dleg" id="qaLeg"></div></div>
+      <div class="feed" id="feed" title="click a row for the full question & model output"></div></div>
+  </div></div>
+
+<!-- SYSTEM -->
+<div class="sec" id="system"><h2>System resources <span class="hint">live · sampled every 2s · history kept server-side (full on refresh)</span></h2>
+  <div class="grid g3">
+    <div class="card"><div class="ch"><h3>Decode throughput</h3><span class="sysbig" id="sysTps" style="color:var(--warn)">—</span></div>
+      <div class="muted" id="sysTpsNote" style="display:none;font-size:11.5px;margin-top:6px;line-height:1.45">decode t/s requires a ds4-style server launched from the dashboard (no parseable server.log)</div>
+      <div class="syschart"><canvas id="sysTpsChart"></canvas></div></div>
+    <div class="card"><div class="ch"><h3>Memory <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· model / system</span></h3><span class="sysbig" id="sysRam" style="color:var(--acc2)">—</span></div>
+      <div class="muted" id="sysRamNote" style="display:none;font-size:11.5px;margin-top:6px;line-height:1.45">host memory metrics are macOS-only (vm_stat/sysctl) — model RSS still shown when available</div>
+      <div class="syslegend" id="sysMemLeg"></div>
+      <div class="syschart"><canvas id="sysRamChart"></canvas></div></div>
+    <div class="card"><div class="ch"><h3>Server CPU</h3><span class="sysbig" id="sysCpu" style="color:var(--ok)">—</span></div><div class="syschart"><canvas id="sysCpuChart"></canvas></div></div>
+  </div></div>
+
+<!-- ACCURACY -->
+<div class="sec" id="accuracy"><h2>Accuracy <select id="accBench" onchange="accBenchUser=true;accbars()" style="margin-left:6px;font-size:13px"></select><span class="hint" id="macroHint"></span></h2>
+  <p class="muted" id="accDesc" style="font-size:12px;margin:-4px 0 12px;line-height:1.5"></p>
+  <div class="grid g2">
+    <div class="card"><h3>Your runs<span id="refLbl"></span> <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· 95% Wilson CI shown on your bars</span></h3><div id="accbars" style="margin-top:12px"></div>
+      <p class="muted" id="accNote" style="font-size:12px;margin:11px 0 0;line-height:1.5">Frontier baselines are <b>published numbers</b> (eval-setup-dependent — for context, not size-matched). Small-N runs have wide CIs; treat overlapping CIs as indistinguishable. Edit/add baselines in <a href="#" onclick="openSetup();return false">Setup</a>.</p></div>
+    <div class="card"><h3>Thinking vs non-thinking</h3><canvas id="modeChart"></canvas></div>
+  </div></div>
+
+<!-- RUNS -->
+<div class="sec" id="runs"><h2>Runs explorer <span class="hint">click a run to inspect every question</span></h2>
+  <div class="toolbar" style="margin-bottom:12px">
+    <input type="search" id="q" placeholder="filter runs…" oninput="filterRuns()" style="min-width:200px"><span class="muted" id="runcount" style="margin-left:auto"></span></div>
+  <div class="card" style="padding:0;overflow-x:auto"><table><thead id="runHead"></thead><tbody id="runBody"></tbody></table></div></div>
+
+<div class="foot">Live stream, accuracy &amp; LLM activity update ~1.5s · tables 6s · live metrics &amp; benchmark numbers come from <span class="mono">results/</span> &amp; <span class="mono">server.log</span>; the model id &amp; host specs are auto-detected, reference baselines come from your <span class="mono">config.json</span> (Setup).<br>Methodology &amp; caveats in README.md — small-N Wilson CIs, page-cache/thermal noise, non-thinking letter bias, decode t/s ±~10%. Rubric-graded benchmarks (e.g. HealthBench) score 0–100, not % correct, and are excluded from the MCQ macro-average.</div>
+</div>
+
+<div id="detModal" role="dialog" aria-modal="true" aria-label="Run detail" onclick="if(event.target===this)closeDetails()"><div class="box" tabindex="-1">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 id="detTitle" style="margin:0">Run detail</h2>
+    <div style="display:flex;gap:8px"><button class="iconbtn" id="detCopyWrong" onclick="copyWrong()">⧉ copy wrong as JSON</button><button class="btn g" onclick="closeDetails()">Close</button></div></div>
+  <div id="detSummary" class="muted" style="font-size:13px;margin-top:4px"></div>
+  <div class="dtoolbar"><div class="seg sm"><button id="dfAll" class="on" onclick="setDetFilter('all')">all</button><button id="dfOk" onclick="setDetFilter('ok')">correct</button><button id="dfNo" onclick="setDetFilter('no')">wrong</button></div>
+    <input type="search" id="detQ" placeholder="search questions…" oninput="renderDet()" style="flex:1;min-width:160px"></div>
+  <div id="detBody"></div>
+</div></div>
+
+<div id="setupModal" role="dialog" aria-modal="true" aria-label="Setup" onclick="if(event.target===this)closeSetup()"><div class="box" tabindex="-1" style="max-width:680px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">Setup</h2>
+    <button class="btn g" onclick="closeSetup()">Close</button></div>
+  <p class="muted" style="font-size:12.5px;margin:6px 0 14px;line-height:1.5">All optional. Model id and host specs are auto-detected from your running server and OS — nothing here is required to run benchmarks. Saved to a git-ignored <code class="mono">config.json</code>.</p>
+
+  <h3 style="font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 8px">Auto-detected</h3>
+  <div class="chips" id="setupDetected" style="margin-bottom:18px"></div>
+
+  <h3 style="font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 8px">Display</h3>
+  <div class="toolbar" style="margin-bottom:6px"><label class="muted" style="font-size:12px;width:96px">Title</label><input id="setTitle" type="text" placeholder="benchy" style="flex:1"></div>
+  <div class="toolbar" style="margin-bottom:18px"><label class="muted" style="font-size:12px;width:96px">Baseline tag</label><input id="setBaseline" type="text" placeholder="baseline" style="flex:1" title="the run tag everything else is compared against in Accuracy"></div>
+
+  <h3 style="font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 4px">Reference baselines <span class="muted" style="text-transform:none;letter-spacing:0">· optional external scores to compare against, per benchmark</span></h3>
+  <div class="toolbar" style="margin:10px 0">
+    <select id="refBench" style="min-width:150px"></select>
+    <input id="refLabel" type="text" placeholder="model / source label" style="flex:1;min-width:140px">
+    <input id="refAcc" type="number" step="0.1" min="0" max="100" placeholder="score %" style="width:96px">
+    <select id="refKind" title="frontier = large general model · reference = comparable/specialized"><option value="ref">reference</option><option value="frontier">frontier</option><option value="chance">chance</option></select>
+    <button class="btn g" onclick="setupAddRef()">+ add</button></div>
+  <div id="refList" style="margin-bottom:16px"></div>
+
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn g" onclick="closeSetup()">Cancel</button><button class="btn" onclick="setupSave()">Save settings</button></div>
+</div></div>
+
+<div id="benchModal" role="dialog" aria-modal="true" aria-label="Benchmarks" onclick="if(event.target===this)closeBenchmarks()"><div class="box" tabindex="-1" style="max-width:680px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2 style="margin:0">Benchmarks</h2>
+    <div style="display:flex;gap:8px"><button class="btn" id="benchAll" onclick="fetchBench('__current__')">Fetch current set</button><button class="btn g" onclick="closeBenchmarks()">Close</button></div></div>
+  <p class="muted" style="font-size:12.5px;margin:6px 0 14px;line-height:1.5">Download benchmarks into <code class="mono">data/</code>. <b>Current</b> = still discriminates mid-2026 models; <b>legacy</b> = saturated (small-model regression only). <b>Code</b> sets (HumanEval/MBPP) <b>generate &amp; execute code</b> for pass@1 — runs model-written code locally (subprocess + timeout). Each set keeps its own license/source — see <code class="mono">DATA.md</code>.</p>
+  <div id="benchStatus" class="muted" aria-live="polite" style="font-size:12px;margin-bottom:8px"></div>
+  <div id="benchList"></div>
+  <div id="benchManual" style="margin-top:14px"></div>
+</div></div>
+
+<button class="chatbtn" onclick="chatToggle()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
+<div class="chatwrap" id="chatwrap"><div class="chat" id="chatpanel">
+  <div class="chathead"><div class="ttl" id="chatTtl">chat <span class="ep" id="chatEp">/v1</span></div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+      <label class="ccontrols" title="chain-of-thought reasoning"><input type="checkbox" id="chatThink" style="width:auto"> thinking</label>
+      <button class="iconbtn" onclick="chatClear()" title="clear conversation">⌫ clear</button>
+      <button class="iconbtn" onclick="chatFull()" title="expand / restore">⤢</button>
+      <button class="iconbtn" onclick="chatToggle()" aria-label="close">×</button></div></div>
+  <div class="chatmsgs" id="chatmsgs"></div>
+  <div class="chatcompose">
+    <div class="ccontrols"><span id="chatStatus" aria-live="polite">checking server…</span><span style="margin-left:auto" class="muted">Enter to send · Shift+Enter newline</span></div>
+    <div class="cinput"><textarea id="chatInput" rows="1" placeholder="Ask the model something…" oninput="chatAutogrow(this)" onkeydown="chatKey(event)"></textarea><button class="csend" id="chatSend" onclick="chatSendOrStop()">↑</button></div></div>
+</div></div>
+
+<button class="dbgbtn" onclick="toggleDbg()">&lt;/&gt; debug</button>
+<div class="dbg" id="dbg"><div class="dbgh"><b style="font-size:13px">Debug</b>
+  <div class="seg sm" style="margin-left:6px"><button class="on" data-d="timeline" onclick="dbgTab('timeline')">timeline</button><button data-d="snap" onclick="dbgTab('snap')">snapshot</button><button data-d="server" onclick="dbgTab('server')">server.log</button><button data-d="eval" onclick="dbgTab('eval')">eval.log</button></div>
+  <button class="iconbtn" style="margin-left:auto" onclick="dbgCopy()">⧉ copy</button><button class="iconbtn" onclick="toggleDbg()" aria-label="close">×</button></div>
+  <pre id="dbgBody" class="mono">…</pre></div>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="errbar" role="status" aria-live="polite"></div>
+<script>
+const CSRF="__BENCHY_CSRF__";
+/* Inject the per-launch CSRF token on every state-changing request. A cross-site page can't
+   read this token (same-origin policy hides our HTML), so its forged POSTs are rejected. */
+(function(){const _f=window.fetch;window.fetch=function(u,o){o=o||{};const m=(o.method||'GET').toUpperCase();
+  if(m!=='GET'&&m!=='HEAD'){o.headers=Object.assign({'X-Benchy-CSRF':CSRF},o.headers||{});}return _f.call(this,u,o);};})();
+let RUNS=[],PERF=[],META={},SUMMARY={},LIVE={},STREAM={},SYS={},ACT={},HISTM=[];
+let VIEW='acc',SORT={k:'ts',d:-1},RMODE='thinking',FEEDF='all',DETF='all',DET=[],DETFILE='',charts={},_dataSig='',_streamSig='',_expSig='',accBenchUser=false,rBenchUser=false;
+function setText(id,t){const e=$(id);if(e&&e.textContent!==t)e.textContent=t;}
+let DBG={open:false,tab:'timeline'};
+let REGMAP={};   // key -> {name,tier,fit,desc,domain} built from /api/benchmarks (registry + manual)
+const NICE={medqa_test:'MedQA-USMLE',medmcqa:'MedMCQA',mmlu_medical:'MMLU Medical',pubmedqa:'PubMedQA',medxpertqa:'MedXpertQA',healthbench_hard:'HealthBench Hard',mmlu_pro:'MMLU-Pro',supergpqa:'SuperGPQA',humaneval:'HumanEval',mbpp:'MBPP',gpqa:'GPQA',hle:'HLE'};
+function regName(b){return (REGMAP[b]&&REGMAP[b].name)||NICE[b]||b;}
+function regDesc(b){return (REGMAP[b]&&REGMAP[b].desc)||'';}
+function regTier(b){return (REGMAP[b]&&REGMAP[b].tier)||'other';}
+const nice=b=>regName(b);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=v=>(v==null||v==='')?'—':v;
+function chart(id,cfg){const ex=charts[id];
+  if(ex&&ex.config.type===cfg.type){const nd=(cfg.data&&cfg.data.datasets)||[];
+    ex.data.labels=(cfg.data&&cfg.data.labels)||[];
+    if(nd.length!==ex.data.datasets.length)ex.data.datasets=nd;else nd.forEach((d,i)=>Object.assign(ex.data.datasets[i],d));
+    if(cfg.options)ex.options=cfg.options;ex.update('none');return;}
+  if(ex)ex.destroy();const c=$(id);if(c&&window.Chart)charts[id]=new Chart(c,cfg);}
+const grid='#1b1b1e';
+/* Chart.js is vendored (static/vendor/); if it still failed to load (file missing), guard every
+   global access so the rest of the dashboard still boots instead of dying on a ReferenceError. */
+if(window.Chart){Chart.defaults.color='#8a8a8a';Chart.defaults.font.family='-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,system-ui,sans-serif';Chart.defaults.borderColor=grid;Chart.defaults.animation=false;
+Chart.defaults.interaction={mode:'index',intersect:false};Chart.defaults.plugins.tooltip.displayColors=false;Chart.defaults.plugins.tooltip.padding=8;Chart.defaults.plugins.tooltip.titleColor='#ededed';Chart.defaults.plugins.tooltip.bodyColor='#ededed';Chart.defaults.plugins.tooltip.backgroundColor='#16161a';Chart.defaults.plugins.tooltip.borderColor='#2a2a2e';Chart.defaults.plugins.tooltip.borderWidth=1;Chart.defaults.elements.point.hoverRadius=5;}
+else{console.warn('benchy: Chart.js failed to load (static/vendor/ missing?) — charts disabled, the rest of the dashboard still works.');}
+if(window.marked)marked.setOptions({breaks:true,gfm:true});
+
+/* ---------- clipboard + toast ---------- */
+function toast(msg,bad){const t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.textContent=msg;$('toasts').appendChild(t);requestAnimationFrame(()=>t.classList.add('in'));setTimeout(()=>{t.classList.remove('in');setTimeout(()=>t.remove(),320)},1800);}
+async function copy(text,label){try{await navigator.clipboard.writeText(text);toast((label||'Copied'));return}catch(e){}
+  const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');toast((label||'Copied'))}catch(_){toast('Copy failed',1)}ta.remove();}
+async function copyReport(btn){btn&&(btn.disabled=true);try{const md=await fetch('/api/report').then(r=>r.text());await copy(md,'Report markdown copied')}catch(e){toast('Could not fetch report',1)}btn&&(btn.disabled=false);}
+function copyDiag(){copy(JSON.stringify({ts:new Date().toISOString(),live:LIVE,stream_live:STREAM.live,sys:SYS,activity:ACT},null,2),'Diagnostics snapshot copied');}
+
+/* ---------- count-up ---------- */
+function countUp(el,to,opts){if(!el)return;opts=opts||{};const dec=opts.dec||0,suf=opts.suf||'';
+  const from=parseFloat(el.dataset.v||'');const f=isNaN(from)?to:from;
+  el.dataset.v=to;if(f===to){el.textContent=to.toFixed(dec)+suf;return}
+  const t0=performance.now(),dur=opts.dur||560;
+  function step(t){let k=Math.min(1,(t-t0)/dur);k=1-Math.pow(1-k,3);el.textContent=(f+(to-f)*k).toFixed(dec)+suf;if(k<1)requestAnimationFrame(step)}
+  requestAnimationFrame(step);}
+function liveNum(el,val,dec,suf){if(!el)return;if(val==null){el.textContent='—';el.dataset.v='';return}countUp(el,val,{dec:dec,suf:suf||''});}
+function fmtDur(s){if(s==null||isNaN(s))return '—';s=Math.round(s);const m=Math.floor(s/60);return m?m+'m '+(s%60)+'s':s+'s';}
+
+/* ---------- discreet environment strip ---------- */
+function envStrip(){
+  const el=$('envstrip');if(!el)return;
+  const env=META.env||{};el.dataset.sig=el.dataset.sig||'';
+  const sig=JSON.stringify(env);if(el.dataset.sig===sig)return;el.dataset.sig=sig;
+  if(!Object.keys(env).length){el.innerHTML='<span class="es muted">model &amp; host auto-detect when the server is up · live footprint in System</span>';return;}
+  // pass an index, not the key/value strings: env values (e.g. the model id from /v1/models) stay inert
+  el.innerHTML=Object.entries(env).map(([k,v],i)=>`<span class="es" title="click to copy" onclick="copyEnvChip(${i})"><b>${esc(k)}</b> ${esc(String(v))}</span>`).join('');
+}
+function copyEnvChip(i){const e=Object.entries(META.env||{})[i];if(e)copy(e[0]+': '+e[1],e[0]+' copied');}
+
+/* ---------- first-run checklist ---------- */
+/* While results/runs.jsonl is empty (and nothing is live) the experiment band and the A/B
+   card have nothing to say — show the 3-step getting-started panel instead. It points at
+   the EXISTING affordances (Benchmarks modal, the #control cards) and disappears for good
+   the moment the first run record lands. */
+function firstRunUI(){
+  const fr=$('firstrun');if(!fr)return;
+  const fresh=!(RUNS&&RUNS.length)&&!STREAM.running;
+  fr.style.display=fresh?'block':'none';
+  $('experiment').style.display=fresh?'none':'';
+  $('paired').style.display=fresh?'none':'';
+  if(fresh)setText('frServer',META.server||'the configured server URL');
+}
+/* ---------- experiment band ---------- */
+function experimentBand(){
+  const el=$('expCard');if(!el)return;
+  const running=!!STREAM.running,lv=STREAM.live||{};
+  const sorted=[...RUNS].sort((a,b)=>(a.ts>b.ts?1:(a.ts<b.ts?-1:0)));
+  const activeTag=(running&&lv.tag)?lv.tag:(sorted.length?sorted[sorted.length-1].tag:'—');
+  const baseline=(META.baseline_tag||'baseline');
+  const lastRun=sorted.length?sorted[sorted.length-1]:null;
+  const bench=(running&&lv.benchmark)?lv.benchmark:(lastRun?lastRun.benchmark:'');
+  const ourBest=RUNS.filter(r=>r.tag===activeTag&&r.benchmark===bench).sort((a,b)=>b.accuracy-a.accuracy)[0];
+  const baseBest=RUNS.filter(r=>r.tag===baseline&&r.benchmark===bench).sort((a,b)=>b.accuracy-a.accuracy)[0];
+  const refs=(META.references||{})[bench]||[];const primaryRef=SUMMARY.primary_ref;
+  let refPick=primaryRef?refs.find(r=>r.label===primaryRef):null;   // configured primary baseline if it exists for this benchmark
+  if(!refPick&&refs.length)refPick=refs.filter(r=>r.kind!=='chance').sort((a,b)=>b.accuracy-a.accuracy)[0]||refs[0];  // else strongest existing reference
+  const liveActive=running&&lv.benchmark===bench&&lv.accuracy!=null;   // currently recording this benchmark
+  const ourAcc=liveActive?lv.accuracy:(ourBest?ourBest.accuracy:null);
+  const delta=(ourAcc!=null&&baseBest)?+(ourAcc-baseBest.accuracy).toFixed(1):null;
+  const sig=[running,activeTag,bench,lv.i,lv.accuracy,ourBest&&ourBest.accuracy,baseBest&&baseBest.accuracy,refPick&&refPick.label].join('|');
+  if(sig===_expSig)return;_expSig=sig;
+  const isBase=activeTag===baseline;
+  const desc=isBase?('This is the baseline tag (<b>'+esc(baseline)+'</b>) — the reference every other run is measured against.'):('Comparing run <b>'+esc(activeTag)+'</b> against the baseline tag <b>'+esc(baseline)+'</b> on the same benchmark.');
+  const status=running?'<span class="tag ok" style="display:inline-flex;align-items:center;gap:6px"><span class="dot"></span>running</span>':'<span class="tag">idle · last run</span>';
+  const mc=(l,v,c,cls)=>`<div class="expmetric"><div class="expml">${l}</div><div class="expmv ${cls||''}" style="color:${c||'var(--ink)'}">${v}</div></div>`;
+  const dV=delta==null?'—':(delta>=0?'+':'')+delta+' pts';
+  const dC=delta==null?'var(--mut)':delta>0?'var(--ok)':delta<0?'var(--dang)':'var(--mut)';
+  const ourV=ourAcc!=null?(ourAcc+'%'+(liveActive?'<span class="livedot"></span>':'')):'—';
+  const prog=running?`<div class="expprog"><div class="expbar"><i style="width:${lv.n?Math.round((lv.i||0)/lv.n*100):0}%"></i></div><span class="mono muted" style="font-size:12px;white-space:nowrap">${lv.i||0}/${lv.n||0} · ${esc(nice(lv.benchmark))} · ${esc(lv.mode||'')} · acc ${lv.accuracy!=null?lv.accuracy:'?'}%</span></div>`:'';
+  el.innerHTML=`<div class="exphead"><div style="min-width:240px;flex:1">
+      <div class="expk">CURRENT RUN</div>
+      <div class="exptitle"><span class="tag pur">${esc(activeTag)}</span> ${status}</div>
+      <p class="muted" style="margin:9px 0 0;font-size:12.5px;max-width:680px;line-height:1.55">${desc}</p></div>
+    <div class="expmetrics">
+      ${mc(esc(nice(bench))+' · this build'+(liveActive?' · live':''),ourV,'var(--ok)',liveActive?'blink':'')}
+      ${mc('vs '+baseline,baseBest?baseBest.accuracy+'%':'—')}
+      ${mc('Δ vs baseline'+(liveActive?' · live':''),dV,dC,liveActive&&delta!=null?'blink':'')}
+      ${mc(refPick?esc(refPick.label):'reference',refPick?refPick.accuracy+'%':'—','var(--teal)')}
+    </div></div>${prog}`;
+}
+/* ---------- system resources ---------- */
+function sysOpts(unit,max){return {animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+(c.parsed.y==null?'—':c.parsed.y)+' '+unit}}},scales:{y:{min:0,max:max,grid:{color:grid},ticks:{maxTicksLimit:4}},x:{display:false}}};}
+function systemUI(){
+  // capability honesty: if the data source for a panel doesn't exist here, say so explicitly
+  const flags=META.flags||{};
+  const tn=$('sysTpsNote');if(tn)tn.style.display=flags.ds4_log_telemetry===false?'block':'none';
+  const mn=$('sysRamNote');if(mn)mn.style.display=flags.darwin===false?'block':'none';
+  const h=(HISTM||[]).slice(-300);if(!h.length)return;
+  const labels=h.map((_,i)=>i),last=h[h.length-1];
+  const lastTps=[...h].reverse().find(r=>r.tps!=null);
+  // recency gate: a decode-t/s sample older than ~30s (or with the server down) is history,
+  // not a live headline — show — instead of the stale number
+  const fresh=lastTps&&last.up&&last.t!=null&&lastTps.t!=null&&(last.t-lastTps.t)<=30;
+  setText('sysTps',fresh?lastTps.tps.toFixed(1)+' t/s':(lastTps?'—':(last.up?'idle':'offline')));
+  // decode: 0 when not decoding (so the line is anchored at the baseline, not floating gaps)
+  const tps=h.map(r=>r.up?(r.tps!=null?r.tps:0):null),tpsMax=Math.max(10,...tps.filter(x=>x!=null));
+  chart('sysTpsChart',{type:'line',data:{labels,datasets:[{data:tps,borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:false}]},options:sysOpts('t/s',Math.ceil(tpsMax*1.1))});
+  const memTot=(META.host&&META.host.mem_total_gb)||null;
+  setText('sysRam',last.rss!=null?last.rss+' GB':'—');   // big readout = model RSS only (short, never wraps)
+  const hasSwap=h.some(r=>r.swap!=null&&r.swap>0);
+  const leg=$('sysMemLeg');
+  if(leg){const ps=['<span><i style="background:#3291ff"></i>model '+(last.rss!=null?last.rss:'—')+' GB</span>',
+    '<span><i style="background:#8a63d2"></i>system '+(last.used!=null?last.used:'—')+(memTot?'/'+memTot:'')+' GB</span>'];
+    if(hasSwap)ps.push('<span><i style="background:#e5484d"></i>swap '+(last.swap!=null?last.swap:0)+' GB</span>');
+    leg.innerHTML=ps.join('');}
+  const memDs=[{label:'model RSS',data:h.map(r=>r.rss),borderColor:'#3291ff',backgroundColor:'rgba(50,145,255,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:true},
+    {label:'system used',data:h.map(r=>r.used),borderColor:'#8a63d2',tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true}];
+  if(hasSwap)memDs.push({label:'swap',data:h.map(r=>r.swap),borderColor:'#e5484d',backgroundColor:'rgba(229,72,77,.08)',tension:.3,pointRadius:0,borderWidth:1.5,spanGaps:true});
+  chart('sysRamChart',{type:'line',data:{labels,datasets:memDs},options:sysOpts('GB',memTot?Math.ceil(memTot*1.05):null)});
+  setText('sysCpu',last.cpu!=null?Math.round(last.cpu)+'%':'—');
+  const cpu=h.map(r=>r.up?(r.cpu!=null?r.cpu:0):null),cpuMax=Math.max(100,...cpu.filter(x=>x!=null));
+  chart('sysCpuChart',{type:'line',data:{labels,datasets:[{data:cpu,borderColor:'#0cce6b',backgroundColor:'rgba(12,206,107,.12)',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:false}]},options:sysOpts('%',Math.ceil(cpuMax/10)*10)});
+}
+/* ---------- paired A/B (McNemar) ---------- */
+function commonBenches(a,b){
+  const ba=new Set((RUNS||[]).filter(r=>r.tag===a).map(r=>r.benchmark).filter(Boolean));
+  const bb=new Set((RUNS||[]).filter(r=>r.tag===b).map(r=>r.benchmark).filter(Boolean));
+  return [...ba].filter(x=>bb.has(x));   // only benchmarks BOTH models ran
+}
+function refreshCmpBench(){
+  const s=$('cmpBench');if(!s)return;const cur=s.value;
+  const benches=commonBenches($('cmpA').value,$('cmpB').value);
+  s.innerHTML=benches.length?benches.map(v=>`<option value="${esc(v)}">${esc(nice(v))}</option>`).join(''):'<option value="">— no common benchmark —</option>';
+  if(benches.includes(cur))s.value=cur;
+}
+function populateCompare(){
+  const tags=[...new Set((RUNS||[]).map(r=>r.tag).filter(Boolean))];
+  const fill=(id,vals)=>{const s=$(id);if(!s)return;const cur=s.value;s.innerHTML=vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(vals.includes(cur))s.value=cur;};
+  fill('cmpA',tags);fill('cmpB',tags);
+  const A=$('cmpA'),B=$('cmpB');
+  if(A&&B&&tags.length>=2&&A.value===B.value){B.value=tags.find(t=>t!==A.value)||tags[1];}
+  if(A&&B&&!A._wired){A.addEventListener('change',refreshCmpBench);B.addEventListener('change',refreshCmpBench);A._wired=true;}
+  refreshCmpBench();   // benchmark list = only tests common to A and B
+}
+function fmtCompare(d){
+  if(!d||!d.ok)return '<span style="color:var(--dang)">'+esc((d&&d.error)||'no result')+'</span>';
+  const verdict=d.significant
+    ? `<b style="color:${d.delta>0?'var(--ok)':'var(--dang)'}">${esc(d.tag_a)} ${d.delta>0?'>':'<'} ${esc(d.tag_b)}</b> — <b>significant</b> (p=${d.p_value})`
+    : `<b style="color:var(--warn)">no significant difference</b> (p=${d.p_value})`;
+  const cov=d.n_min!=null?` (of ${d.n_min} in the smaller run)`:'';
+  const warn=(d.warnings&&d.warnings.length)?`<div style="margin-top:7px;font-size:12px;color:var(--warn)">warning: ${d.warnings.map(esc).join(' · ')}</div>`:'';
+  return `<div style="font-size:13.5px">${verdict}</div>${warn}
+    <div class="mono" style="margin-top:7px">${esc(d.tag_a)} <b>${d.acc_a}%</b> · ${esc(d.tag_b)} <b>${d.acc_b}%</b> · Δ <b>${d.delta>0?'+':''}${d.delta} pts</b> · N=${d.n_common} common${cov}</div>
+    <div class="mono muted" style="margin-top:4px">discordant ${d.discordant} ( ${esc(d.tag_a)}-only ${d.a_better} · ${esc(d.tag_b)}-only ${d.b_better} ) · both right ${d.both_right} · both wrong ${d.both_wrong}</div>
+    <div class="muted" style="margin-top:7px;font-size:11.5px">McNemar exact two-sided over the ${d.discordant} discordant pairs. A small p means the two builds genuinely disagree on these questions — overlapping Wilson bars can't detect a paired difference this small.</div>`;
+}
+async function runCompare(){
+  const a=$('cmpA').value,b=$('cmpB').value,bench=$('cmpBench').value,mode=$('cmpMode').value,el=$('cmpResult');
+  if(!el)return;
+  if(!a||!b||!bench){el.innerHTML='<span class="muted">pick two run tags and a benchmark</span>';return;}
+  el.textContent='comparing…';
+  try{const qs='/api/compare?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+'&bench='+encodeURIComponent(bench)+(mode?'&mode='+encodeURIComponent(mode):'');
+    el.innerHTML=fmtCompare(await fetch(qs).then(r=>r.json()));}
+  catch(e){el.innerHTML='<span class="muted">compare failed</span>';}
+}
+/* ---------- accuracy ---------- */
+function accbars(){
+  const bench=($('accBench')&&$('accBench').value)||'';
+  const installed=(META.benchmarks||[]).includes(bench);
+  // invalid / mode_suspect / errors are additive per_run keys (legacy summaries simply lack them -> falsy)
+  const ours=(SUMMARY.per_run||[]).filter(r=>r.benchmark===bench).map(r=>({label:r.tag+' · '+r.mode+' (N='+r.n+')',acc:r.accuracy,lo:r.ci_lo,hi:r.ci_hi,small:r.small_n,cls:'ours',invalid:!!r.invalid,suspect:!!r.mode_suspect,errors:r.errors||0}));
+  const refs=((META.references||{})[bench]||[]).map(r=>({label:r.label,acc:r.accuracy,cls:r.kind||'ref'}));
+  const all=ours.concat(refs).sort((a,b)=>b.acc-a.acc);
+  const refLbl=$('refLbl');if(refLbl)refLbl.textContent=refs.length?' vs reference baselines':'';
+  const ad=$('accDesc');if(ad)ad.textContent=regDesc(bench)||'';
+  const CLS={ours:['linear-gradient(90deg,#0070f3,#3291ff)','Your runs'],frontier:['#a855f7','Frontier'],ref:['#14b8a6','Reference'],chance:['#3a3a3a','Chance']};
+  const present=[...new Set(all.map(x=>x.cls))];
+  const legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 14px;font-size:12px;color:#9a9aa2">'+['ours','frontier','ref','chance'].filter(k=>present.includes(k)).map(k=>`<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:11px;height:11px;border-radius:3px;display:inline-block;background:${CLS[k][0]}"></i>${CLS[k][1]}</span>`).join('')+'</div>';
+  $('accbars').innerHTML=all.length?(legend+all.map(x=>{const s=CLS[x.cls]||CLS.ref;
+    // same chips as the runs explorer: invalid (dang), mode suspect (warn), excluded request errors (amber count)
+    const chips=x.cls!=='ours'?'':((x.invalid?' <span class="tag dang" title="more than 5% of requests failed — accuracy covers only the scored questions and is NOT comparable to a clean run">invalid'+(x.errors?' · '+esc(x.errors)+' err':'')+'</span>':'')
+      +(x.suspect?' <span class="tag warn" title="server ignored the think flag">suspect</span>':'')
+      +((!x.invalid&&x.errors>0)?' <span style="color:var(--warn);font-size:11px" title="'+esc(x.errors)+' failed request(s), excluded from the accuracy numerator and denominator">'+esc(x.errors)+' err</span>':''));
+    const lbl=x.cls==='ours'?`<b${x.invalid?' style="text-decoration:line-through;color:var(--dang)"':''}>${esc(x.label)}</b>${chips}`:esc(x.label);
+    const ttl=x.label+(x.invalid?' — INVALID: more than 5% of requests failed; not comparable to a clean run':'')+(x.suspect?' — mode suspect: server ignored the think flag':'')+(x.errors>0?' — '+x.errors+' failed request(s) excluded from scoring':'');
+    const ci=(x.cls==='ours'&&x.lo!=null)?`<div class="ci" style="left:${x.lo}%;width:${Math.max(0,x.hi-x.lo)}%"></div>`:'';
+    const fill=x.invalid?'linear-gradient(90deg,#ff4d4f,#7f1d1d);opacity:.55':s[0];
+    const pv=(x.cls==='ours'&&x.lo!=null)?`${x.acc}% <small>[${x.lo}–${x.hi}]${x.small?' *':''}</small>`:`${x.acc}%`;
+    return `<div class="barwrap"><div class="lab" title="${esc(ttl)}">${lbl}</div><div class="track"><div class="fill" style="width:${Math.max(2,x.acc)}%;background:${fill}"></div>${ci}</div><div class="pv mono"${x.invalid?' style="color:var(--dang)"':''}>${pv}</div></div>`}).join('')):('<div class="muted">No data for '+(nice(bench)||'this benchmark')+' yet — '+(installed?'launch a run from <b>Run a test</b> above.':'<a href="#" onclick="openBenchmarks();return false">fetch it from Benchmarks</a> first.')+'</div>');
+  // coherence: tell the user when the selected benchmark has baselines but isn't installed to run
+  const note=$('accNote');
+  if(note)note.innerHTML=((bench&&!installed&&refs.length)?'<b>'+esc(nice(bench))+'</b> isn\'t installed — <a href="#" onclick="openBenchmarks();return false">fetch it from Benchmarks</a> to score your model against these baselines. ':'')+'Frontier baselines are <b>published numbers</b> (eval-setup-dependent — for context, not size-matched). Edit/add in <a href="#" onclick="openSetup();return false">Setup</a>.';
+  // mode chart from raw runs
+  const runs=RUNS.filter(r=>r.benchmark===bench);
+  const byMode={};runs.forEach(r=>{(byMode[r.mode]=byMode[r.mode]||[]).push(r.accuracy)});
+  const labels=Object.keys(byMode),data=labels.map(m=>byMode[m].reduce((a,b)=>a+b,0)/byMode[m].length);
+  chart('modeChart',{type:'bar',data:{labels:labels.map(m=>m==='thinking'?'thinking':'non-thinking'),datasets:[{data,backgroundColor:labels.map(m=>m==='thinking'?'#0cce6b':'#8a63d2'),borderRadius:8,barThickness:46}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.x.toFixed(1)+'%'}}},scales:{x:{beginAtZero:true,max:100,grid:{color:grid},ticks:{callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:14}}}}}});
+  const mac=SUMMARY.macro||{};
+  $('macroHint').textContent=(mac.thinking_mean!=null)?('MCQ macro-avg '+mac.thinking_mean+'% thinking (k='+mac.thinking_k+(mac.thinking_tag?', '+mac.thinking_tag:'')+')'+(mac.nothink_mean!=null?' · '+mac.nothink_mean+'% nothink (k='+mac.nothink_k+(mac.nothink_tag?', '+mac.nothink_tag:'')+')':'')+' · excl. HealthBench'):'';
+}
+
+/* ---------- performance ---------- */
+/* ---------- runs explorer ---------- */
+/* searchable text is precomputed once per row in loadAll (indexRuns) — non-enumerable so
+   copyRun's JSON stays clean; the filter input is debounced 150ms (filterRuns). */
+function indexRuns(){RUNS.forEach(r=>Object.defineProperty(r,'_q',{value:JSON.stringify(r).toLowerCase()}));}
+let _qTimer=null;
+function filterRuns(){clearTimeout(_qTimer);_qTimer=setTimeout(renderRuns,150);}
+function renderRuns(){
+  const q=($('q').value||'').toLowerCase();
+  const cols=[['ts','date'],['benchmark','benchmark'],['tag','tag'],['mode','mode'],['n','N',1],['accuracy','accuracy',1],['errors','err',1],['sec_per_q','s/q',1],['notes','notes']];
+  let rows=RUNS.slice().filter(r=>!q||(r._q||JSON.stringify(r).toLowerCase()).includes(q));
+  rows.sort((a,b)=>{const x=a[SORT.k],y=b[SORT.k];if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*SORT.d});
+  $('runHead').innerHTML='<tr>'+cols.map(c=>`<th class="${c[2]?'n':''}" aria-sort="${SORT.k===c[0]?(SORT.d>0?'ascending':'descending'):'none'}"><button type="button" class="thsort" onclick="sortBy('${c[0]}')">${c[1]}${SORT.k===c[0]?(SORT.d>0?' ↑':' ↓'):''}</button></th>`).join('')+'<th></th></tr>';
+  $('runBody').innerHTML=rows.map((r,ri)=>{const clk=r.details?` style="cursor:pointer" title="click to inspect every question" onclick="openDetailsRow(${ri})"`:'';
+    const cells=cols.map(c=>{let v=r[c[0]];
+      if(c[0]==='accuracy')return `<td class="n mono"><b>${esc(v)}%</b>${r.details?' <span style="color:var(--acc2)">›</span>':''}</td>`;
+      if(c[0]==='tag')return `<td><span class="tag">${esc(v)}</span></td>`;
+      if(c[0]==='mode'){const sus=r.mode_suspect?' <span class="tag warn" title="server ignored the think flag">suspect</span>':'';
+        return `<td><span class="tag ${v==='thinking'?'pur':''}">${esc(v||'—')}</span>${sus}</td>`;}
+      if(c[0]==='errors'){ // additive fields: legacy records (no errors field) keep rendering a plain dash
+        if(r.invalid)return `<td class="n"><span class="tag dang" title="more than 5% of requests failed — accuracy covers only the scored questions and is NOT comparable to a clean run">invalid · ${esc(v==null?'?':v)} err</span></td>`;
+        if(v>0)return `<td class="n"><span class="tag warn" title="${esc(v)} failed request(s), excluded from the accuracy numerator and denominator">${esc(v)} err</span></td>`;
+        return `<td class="n mono muted">${v==null?'—':'0'}</td>`;}
+      return `<td class="${c[2]?'n mono':''} ${c[0]==='notes'?'muted':''}">${esc(v==null?'—':v)}</td>`}).join('');
+    return `<tr${clk}>${cells}<td class="n"><button class="iconbtn xs" title="copy run JSON" onclick="event.stopPropagation();copyRun(${ri})">⧉</button></td></tr>`;}).join('');
+  $('runcount').textContent=rows.length+' run'+(rows.length!==1?'s':'');
+  window._rrows=rows;
+}
+function copyRun(ri){const r=(window._rrows||[])[ri];if(r)copy(JSON.stringify(r,null,2),'Run JSON copied');}
+function openDetailsRow(ri){const r=(window._rrows||[])[ri];if(r&&r.details)openDetails(r.details,r);}   // index, not a string, into the onclick attribute
+function sortBy(k){if(SORT.k===k)SORT.d*=-1;else{SORT.k=k;SORT.d=1}renderRuns()}
+
+/* ---------- live stream + activity ---------- */
+function setMode(m){RMODE=m;$('segT').classList.toggle('on',m==='thinking');$('segN').classList.toggle('on',m==='nothink')}
+function syncBench(){
+  if(!(STREAM.running&&STREAM.live&&STREAM.live.benchmark))return;const b=STREAM.live.benchmark;
+  if(!accBenchUser){const ab=$('accBench');if(ab&&ab.value!==b&&[...ab.options].some(o=>o.value===b)){ab.value=b;accbars();}}
+  if(!rBenchUser){const rb=$('rBench');if(rb&&rb.value!==b&&[...rb.options].some(o=>o.value===b))rb.value=b;}
+}
+function setFeedFilter(f){FEEDF=f;['all','ok','no'].forEach(k=>$('f'+k[0].toUpperCase()+k.slice(1)).classList.toggle('on',k===f));streamUI();}
+function timingParts(e){return [e.prefill_s!=null?'prefill '+e.prefill_s+'s':'',e.think_tokens?'think '+e.think_tokens+' tok':'',e.gen_tokens!=null?'gen '+e.gen_tokens+' tok'+(e.gen_tps!=null?' @ '+e.gen_tps+' t/s':''):'',e.gen_s!=null?e.gen_s+'s decode':''].filter(Boolean);}
+function timingLine(e){const p=timingParts(e);return p.length?`<div class="qtime mono">⏱ ${p.join(' · ')}</div>`:'';}
+function feedText(i){const e=(STREAM.events||[]).find(x=>x.i===i)||{};const tm=timingParts(e).join(' · ');
+  if(e.gold==='rubric')  // HealthBench: rubric score, not pred/gold
+    return `Q${e.i} — HealthBench rubric score ${e.pred} (${e.pred_txt})  running-avg ${e.acc}%  per-q ${e.lat_q!=null?e.lat_q:e.t}s\nprompt: ${e.q}\nmodel output (tail): ${e.ans||''}`;
+  return `Q${e.i} [${e.ok?'CORRECT':'WRONG'}]  pred=${e.pred}  gold=${e.gold}  acc=${e.acc}%  per-q ${e.lat_q!=null?e.lat_q:e.t}s${tm?'\ntiming: '+tm:''}\nQ: ${e.q}\npred: ${e.pred}. ${e.pred_txt}\ngold: ${e.gold}. ${e.gold_txt}\nmodel output (tail): ${e.ans||''}`;}
+function feedRow(e){
+  if(e.error)  // failed request (excluded from scoring) — render distinctly, not as a wrong answer
+    return `<div class="qrow no" data-qi="${e.i}"><div class="qh" onclick="openLiveDetails(${e.i})" title="request failed after retries — excluded from scoring">
+      <span class="mk no">!</span><b class="mono">Q${e.i}</b>
+      <span class="tag dang">error</span><span class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.ans||'request failed')}</span>
+      <span class="qh-r"><span class="mono muted">${e.t!=null?esc(e.t)+'s':''}</span><span class="muted" style="font-size:11px">›</span></span></div></div>`;
+  if(e.gold==='rubric'){  // HealthBench: rubric-scored, not MCQ — no pred/gold, no ✓/✗, color by score band
+    const sc=parseFloat(e.pred)||0,col=sc>=50?'#0cce6b':(sc>=25?'#f5a623':'#ff4d4f');
+    return `<div class="qrow" data-qi="${e.i}"><div class="qh" onclick="openLiveDetails(${e.i})" title="open the conversation, response & rubric">
+      <span style="display:inline-block;min-width:36px;text-align:center;padding:1px 5px;border-radius:5px;font-weight:700;font-size:11px;background:${col};color:#0a0a0c">${sc.toFixed(0)}%</span><b class="mono">Q${e.i}</b>
+      <span class="muted">rubric score</span> <b>${esc(e.pred)}</b> <span class="muted">${esc(e.gold_txt||'')}</span>
+      <span class="qh-r"><span class="mono muted">${e.lat_q!=null?e.lat_q:e.t}s · ${e.acc}% avg</span><span class="muted" style="font-size:11px">›</span><button class="iconbtn xs" title="copy full Q&amp;A" onclick="event.stopPropagation();copyLiveQ(${e.i})">⧉</button></span></div></div>`;}
+  const cls=e.ok?'ok':'no';
+  return `<div class="qrow ${cls}" data-qi="${e.i}"><div class="qh" onclick="openLiveDetails(${e.i})" title="open the full question & model output">
+    <span class="mk ${cls}">${e.ok?'✓':'✗'}</span><b class="mono">Q${e.i}</b>
+    <span class="muted">pred</span> <b>${esc(e.pred)}</b><span class="muted">gold</span> <b>${esc(e.gold)}</b>
+    <span class="qh-r"><span class="mono muted">${e.lat_q!=null?e.lat_q:e.t}s · ${e.acc}%</span><span class="muted" style="font-size:11px">›</span><button class="iconbtn xs" title="copy full Q&amp;A" onclick="event.stopPropagation();copyLiveQ(${e.i})">⧉</button></span></div></div>`;}
+function renderFeed(evs){
+  const open=new Set([...document.querySelectorAll('#feed .qrow.open')].map(n=>n.dataset.qi));
+  const rows=evs.filter(e=>FEEDF==='all'||(FEEDF==='ok'&&e.ok)||(FEEDF==='no'&&!e.ok)).slice().reverse();
+  $('feed').innerHTML=rows.map(feedRow).join('')||'<div class="muted" style="padding:10px">waiting for first answer…</div>';
+  open.forEach(qi=>{const n=document.querySelector('#feed .qrow[data-qi="'+qi+'"]');if(n)n.classList.add('open');});
+  // count scored events only — request errors are excluded from scoring, so they must not inflate the denominator
+  const scored=evs.filter(e=>!e.error),ok=scored.filter(e=>e.ok).length,errN=evs.length-scored.length;
+  setText('feedCount',evs.length?('· '+ok+'/'+scored.length+' ✓'+(errN?' · '+errN+' err':'')):'');
+  renderQaDonut();
+}
+function renderQaDonut(){
+  const lv=STREAM.live||{},evs=STREAM.events||[];
+  const correct=(lv.correct!=null?lv.correct:evs.filter(e=>e.ok).length);
+  const errs=(lv.i!=null&&lv.i>0)?(lv.errors||0):evs.filter(e=>e.error).length;
+  // scored-only denominator (completed minus excluded request errors) — agrees with the headline lv.accuracy
+  const total=(lv.i!=null&&lv.i>0)?Math.max(0,(lv.i||0)-(lv.errors||0)):evs.filter(e=>!e.error).length;
+  const wrong=Math.max(0,total-correct);
+  setText('qaPct',total?Math.round(100*correct/total)+'%':'—');
+  chart('qaDonutChart',{type:'doughnut',data:{labels:['correct','wrong','error (excluded)'],datasets:[{data:[correct,wrong,errs],backgroundColor:['#0cce6b','#ff4d4f','#3f3f46'],borderColor:'#0a0a0c',borderWidth:2,hoverOffset:3}]},options:{maintainAspectRatio:false,cutout:'72%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+c.parsed}}}}});
+  const lg=$('qaLeg');if(lg)lg.innerHTML=`<div class="li"><span class="sw" style="background:#0cce6b"></span><b>${correct}</b>&nbsp;correct</div><div class="li"><span class="sw" style="background:#ff4d4f"></span><b>${wrong}</b>&nbsp;wrong</div>`+(errs?`<div class="li"><span class="sw" style="background:#3f3f46"></span><b>${errs}</b>&nbsp;error${errs>1?'s':''} (excluded)</div>`:'')+`<div class="li muted" style="margin-top:1px">${total} scored</div>`;
+}
+function syncFeedHeight(){const ls=document.querySelector('#liveSec .livestack'),fc=document.querySelector('#liveSec .feedcard');if(ls&&fc&&ls.offsetHeight>40)fc.style.height=ls.offsetHeight+'px';}
+function renderLatBars(lat){
+  const labels=lat.map(p=>p[0]),vals=lat.map(p=>p[1]);
+  const present=vals.filter(x=>x!=null);const mx=Math.max(1,...present);
+  chart('latLive',{type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:'#f5a623',hoverBackgroundColor:'#ffc857',borderRadius:3,borderSkipped:false,categoryPercentage:0.9,barPercentage:0.95}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>'Q'+items[0].label,label:c=>' '+c.parsed.y+' s'}}},scales:{y:{min:0,grid:{color:grid},ticks:{maxTicksLimit:4,callback:v=>v+'s'}},x:{grid:{display:false},ticks:{maxTicksLimit:12,autoSkip:true}}}}});
+  const s=present.slice().sort((a,b)=>a-b);
+  if(s.length){const md=s[Math.floor(s.length/2)],p90=s[Math.min(s.length-1,Math.floor(s.length*0.9))];
+    setText('latStat','med '+md.toFixed(1)+'s · p90 '+p90.toFixed(1)+'s');setText('latCapR','peak '+mx.toFixed(0)+'s · n='+present.length);}
+  else{setText('latStat','');setText('latCapR','');}
+}
+function renderLiveCharts(S){
+  const ser=S.series||[],lat=S.lat||[];
+  chart('accLive',{type:'line',data:{labels:ser.map(p=>p[0]),datasets:[{label:'accuracy',data:ser.map(p=>p[1]),borderColor:'#0cce6b',backgroundColor:'rgba(12,206,107,.10)',fill:true,tension:.25,pointRadius:0,borderWidth:2}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>'Q'+items[0].label,label:c=>' acc '+c.parsed.y+'%'}}},scales:{y:{min:0,max:100,grid:{color:grid},ticks:{callback:v=>v+'%'}},x:{grid:{display:false},title:{display:true,text:'question #'}}}}});
+  renderLatBars(lat);
+  requestAnimationFrame(syncFeedHeight);
+}
+window.addEventListener('resize',()=>syncFeedHeight());
+function streamUI(){
+  const running=STREAM.running,evs=STREAM.events||[],lv=STREAM.live||{};
+  $('liveSec').style.display=(running||evs.length)?'block':'none';
+  $('liveMeta').innerHTML=lv.benchmark?`<b>${esc(nice(lv.benchmark))}</b> · ${esc(lv.mode)} · <span class="mono">${esc(lv.tag||'')}</span>`:'';
+  liveNum($('accBig'),lv.accuracy!=null?lv.accuracy:null,1,'%');
+  const subParts=[];
+  if(lv.correct!=null&&lv.i)subParts.push(esc(lv.correct)+'/'+esc(lv.i)+' correct');
+  if(lv.errors)subParts.push('<span style="color:var(--warn)">'+esc(lv.errors)+' error'+(lv.errors>1?'s':'')+((lv.gen_errors!=null&&lv.grader_errors!=null)?' (gen '+esc(lv.gen_errors)+' · grader '+esc(lv.grader_errors)+')':'')+'</span>');
+  if(lv.correct!=null&&lv.i)subParts.push('elapsed '+fmtDur(lv.elapsed_s));
+  const accSubEl=$('accSub'),subH=subParts.join(' · ');
+  if(accSubEl&&accSubEl.dataset.h!==subH){accSubEl.dataset.h=subH;accSubEl.innerHTML=subH;}
+  $('runBtn').disabled=running;$('stopBtn').style.display=running?'inline-block':'none';
+  const last=evs.length?evs[evs.length-1]:null;
+  const sig=FEEDF+'|'+evs.length+'|'+(last?last.i+'_'+last.acc:'')+'|'+(running?1:0);
+  if((running||evs.length)&&sig!==_streamSig){_streamSig=sig;renderFeed(evs);renderLiveCharts(STREAM);}
+}
+function activityUI(){
+  const a=ACT||{},lv=STREAM.live||LIVE||{};const running=!!STREAM.running;
+  let ph=a.phase||'idle';if(!a.server_up)ph='idle';
+  $('phasePill').dataset.p=ph;$('phaseTxt').textContent=ph;
+  const active=a.server_up&&(ph==='generating'||ph==='thinking'||ph==='prefill');
+  liveNum($('tpsVal'),active?(a.chunk_tps!=null?a.chunk_tps:null):null,1);
+  // capability honesty: without a ds4-style server.log there is no decode telemetry at all —
+  // say so instead of an eternally idle 'avg —'
+  $('tpsFoot').textContent=((META.flags||{}).ds4_log_telemetry===false)?'decode t/s requires a ds4-style server launched from the dashboard'
+    :(a.avg_tps!=null?('avg '+a.avg_tps.toFixed(1)+' t/s'):(a.last_finish?'last: '+a.last_finish.tokens+' tok in '+a.last_finish.secs+'s':'avg —'));
+  liveNum($('genVal'),active?(a.gen||0):(a.last_finish?a.last_finish.tokens:0),0);
+  $('genFoot').textContent=active?'current answer':(a.last_finish?'last answer':'current answer');
+  const ser=a.series||[];
+  if($('actBars').children.length!==42){let h='';for(let i=0;i<42;i++)h+='<i style="height:6%"></i>';$('actBars').innerHTML=h;}
+  const bars=$('actBars').children,N=bars.length,slice=ser.slice(-N),mx=Math.max(1,...slice.map(s=>s.tps||0));
+  for(let i=0;i<N;i++){const s=slice[i-(N-slice.length)],b=bars[i];
+    if(s&&active){b.style.height=Math.max(6,Math.round((s.tps/mx)*100))+'%';b.className=s.thinking?'think':'';b.title=(s.thinking?'thinking ':'')+s.tps+' t/s';}
+    else{b.style.height='6%';b.className='';b.removeAttribute('title');}}
+  setText('eqcapR',active?(ph==='thinking'?'reasoning':'answering')+' · peak '+mx.toFixed(1)+' t/s':(a.server_up?'idle between questions':'server offline'));
+  const i=lv.i||0,n=lv.n||0,el=lv.elapsed_s;
+  $('progVal').textContent=i+'/'+n;
+  if(running&&i>0&&n>i&&el)$('etaFoot').textContent='ETA '+fmtDur((el/i)*(n-i));
+  else $('etaFoot').textContent=running?'ETA —':'idle';
+}
+
+/* ---------- controls ---------- */
+/* POST helper: surfaces non-2xx responses (e.g. the guard's text/plain 403) as a thrown
+   Error with the response text, instead of r.json() rejecting and the status sticking. */
+async function apiPost(url,body){
+  const opts={method:'POST'};
+  if(body!==undefined){opts.headers={'Content-Type':'application/json'};opts.body=JSON.stringify(body);}
+  const r=await fetch(url,opts);const txt=await r.text();
+  if(!r.ok){let msg=txt;try{msg=JSON.parse(txt).error||msg;}catch(e){}throw new Error((msg||('HTTP '+r.status)).slice(0,200));}
+  return JSON.parse(txt);
+}
+async function runTest(){
+  $('runMsg').textContent='starting…';$('runMsg').style.color='var(--mut)';
+  const body={benchmark:$('rBench').value,n:$('rN').value,mode:RMODE,tag:$('rTag').value};
+  try{const r=await apiPost('/api/run',body);
+    $('runMsg').textContent=r.ok?('▶ running '+r.started.tag+' '+r.started.mode+' N='+r.started.n):(r.error);
+    $('runMsg').style.color=r.ok?'var(--ok)':'var(--dang)';
+  }catch(e){$('runMsg').textContent=String(e.message||e);$('runMsg').style.color='var(--dang)';toast('run failed',1);}
+  pulse();
+}
+async function stopTest(){try{await apiPost('/api/run/stop');$('runMsg').textContent='stopped';toast('Run stop requested');}catch(e){$('runMsg').textContent=String(e.message||e);toast('stop failed',1);}pulse()}
+async function startServer(){$('srvMsg').textContent='starting (~1 min)…';
+  try{const r=await apiPost('/api/server/start');
+    $('srvMsg').textContent=r.ok?(r.already?'already up':'loading model…'):(r.error);
+  }catch(e){$('srvMsg').textContent=String(e.message||e);toast('server start failed',1);}}
+function stopAll(){if(!confirm('Stop ALL running tests/chains?'))return;
+  apiPost('/api/stop-all').then(d=>{
+    $('srvMsg').textContent=d.ok?('stopped: '+((d.killed||[]).join(', ')||'nothing was running')):(d.error||'stop incomplete');
+    toast(d.ok?'Stopped all tests':'Stop incomplete — some processes survived',!d.ok);pulse();
+  }).catch(e=>{$('srvMsg').textContent=String(e.message||e);toast('stop-all failed',1);});}
+function killServer(){if(!confirm('Force-kill the model server? Next run reloads the model (~1 min).'))return;
+  apiPost('/api/server/stop').then(()=>{$('srvMsg').textContent='server killed';toast('Server killed');setTimeout(pulse,800);})
+  .catch(e=>{$('srvMsg').textContent=String(e.message||e);toast('kill failed',1);});}
+
+/* ---------- modal a11y: focus moves into the dialog on open, returns to the opener on
+   close; Escape closes whichever of the three modals is open ---------- */
+let _modalReturn=null;
+function modalOpened(id){_modalReturn=document.activeElement;const b=document.querySelector('#'+id+' .box');if(b)b.focus();}
+function modalClosed(){const r=_modalReturn;_modalReturn=null;if(r&&r.focus)try{r.focus()}catch(e){}}
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if($('detModal').style.display==='block')closeDetails();
+  else if($('setupModal').style.display==='block')closeSetup();
+  else if($('benchModal').style.display==='block')closeBenchmarks();});
+
+/* ---------- details modal ---------- */
+function closeDetails(){$('detModal').style.display='none';modalClosed();}
+function setDetFilter(f){DETF=f;$('dfAll').classList.toggle('on',f==='all');$('dfOk').classList.toggle('on',f==='ok');$('dfNo').classList.toggle('on',f==='no');renderDet();}
+function runLockChip(r){  // the run record's additive "locked" field — absent on legacy runs
+  if(!r||r.locked===undefined)return '';
+  return r.locked?' · <span class="tag ok" title="dataset content hash verified against benchmarks.lock.json at run time">locked</span>'
+                 :' · <span class="tag" style="opacity:.7" title="dataset was not lock-verified for this run (BYO file, no pin yet, or BENCHY_SKIP_LOCK_CHECK)">unlocked</span>';
+}
+function openDetails(file,run){
+  DETFILE=file;DETF='all';DET=[];$('detModal').style.display='block';modalOpened('detModal');$('detTitle').textContent='Run detail';$('detSummary').textContent='';$('detQ').value='';
+  setDetFilter('all');$('detBody').innerHTML='<div class="muted">loading…</div>';
+  fetch('/api/details?file='+encodeURIComponent(file)).then(r=>r.json()).then(rows=>{
+    DET=rows||[];
+    if(!DET.length){$('detBody').innerHTML='<div class="muted">No saved per-question details for this run — it predates detail logging. Re-run it to populate.</div>';$('detCopyWrong').style.display='none';return;}
+    const isHB=DET.some(r=>r.criteria!==undefined);DET._hb=isHB;   // error rows have no criteria — sniff the whole run
+    $('detTitle').textContent=(file.split('__')[0]||'Run')+(isHB?' · HealthBench scoring':' · questions');
+    $('detCopyWrong').style.display=isHB?'none':'inline-flex';
+    $('detSummary').innerHTML=detSummaryText()+runLockChip(run);
+    renderDet();
+  }).catch(()=>{$('detBody').innerHTML='<div class="muted">error loading details</div>';});
+}
+function detSummaryText(){  // error rows (failed requests) are excluded from the scored counts and called out separately
+  const errs=DET.filter(r=>r.error).length,scored=DET.filter(r=>!r.error);
+  const errTxt=errs?' · <span style="color:var(--dang)">'+errs+' request error'+(errs>1?'s':'')+' (excluded)</span>':'';
+  if(DET._hb){const mean=scored.length?(scored.reduce((a,r)=>a+(r.score||0),0)/scored.length).toFixed(1):'—';
+    return scored.length+' questions · mean '+mean+'%'+errTxt;}
+  const ok=scored.filter(r=>r.ok).length;
+  return scored.length+' questions · '+ok+'/'+scored.length+' correct ('+(scored.length?(100*ok/scored.length).toFixed(1):'0.0')+'%)'+errTxt;
+}
+function renderDet(){
+  if(!DET.length)return;const isHB=DET._hb;const q=($('detQ').value||'').toLowerCase();
+  let rows=DET.filter(r=>DETF==='all'||(!isHB&&!r.error&&(DETF==='ok'?r.ok:!r.ok)));
+  if(q)rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
+  $('detBody').innerHTML=rows.length?rows.map(r=>r.error?errRow(r):(isHB?hbRow(r):mcqRow(r))).join(''):'<div class="muted">no questions match</div>';
+}
+function copyWrong(){const wrong=DET.filter(r=>!r.ok&&!r.error&&!DET._hb);if(!wrong.length){toast('No wrong answers');return}copy(JSON.stringify(wrong,null,2),wrong.length+' wrong answers copied');}
+function errRow(r){  // a request that still failed after retries: no pred/ok — shown distinctly, excluded from scoring
+  const qtxt=r.question||((r.conversation||[]).map(m=>m.role+': '+m.content).join('  /  ').slice(0,500));
+  return `<details data-i="${r.i}" style="border:1px solid rgba(255,77,79,.4);border-radius:10px;padding:10px 12px;margin:8px 0"><summary style="cursor:pointer;display:flex;align-items:center;gap:8px"><span class="mk no">!</span> <b>Q${r.i}</b> — <span class="tag dang">request error</span> <span class="muted" style="font-size:12px">excluded from scoring</span></summary>${qtxt?`<div style="margin:8px 0;font-size:13px;line-height:1.55">${esc(qtxt)}</div>`:''}<pre class="ans">${esc(r.error_msg||'request failed')}</pre></details>`;
+}
+function showDetailRows(title,rows,focusI){
+  DET=rows||[];DET._hb=DET.some(r=>r.criteria!==undefined);
+  $('detTitle').textContent=title+(DET._hb?' · HealthBench scoring':' · questions');
+  $('detCopyWrong').style.display=DET._hb?'none':'inline-flex';
+  if(!DET.length){$('detBody').innerHTML='<div class="muted">No per-question details yet for this run.</div>';$('detSummary').textContent='';return;}
+  $('detSummary').innerHTML=detSummaryText();
+  renderDet();
+  if(focusI!=null)setTimeout(()=>{const el=document.querySelector('#detBody details[data-i="'+focusI+'"]');if(el){el.open=true;el.scrollIntoView({block:'center'});}},30);
+}
+function openLiveDetails(focusI){
+  $('detModal').style.display='block';modalOpened('detModal');$('detTitle').textContent='Live run · loading…';$('detSummary').textContent='';$('detQ').value='';DETF='all';setDetFilter('all');$('detBody').innerHTML='<div class="muted">loading full detail…</div>';
+  fetch('/api/live_details').then(r=>r.json()).then(d=>{DETFILE=d.file||'';showDetailRows((d.file?d.file.split('__')[0]:'Run')+' · live',d.rows||[],focusI);}).catch(()=>{$('detBody').innerHTML='<div class="muted">error loading live detail</div>';});
+}
+async function copyLiveQ(i){try{const d=await fetch('/api/live_details').then(r=>r.json());const r=(d.rows||[]).find(x=>x.i===i);if(r){copy(r.criteria!==undefined?hbCopyText(r):mcqText(r),'Q'+i+' (full) copied');return;}}catch(e){}copy(feedText(i),'Q'+i+' copied (preview only)');}
+function hbCopyText(r){const conv=(r.conversation||[]).map(m=>m.role+': '+m.content).join('\n');const cr=(r.criteria||[]).map(c=>(c.met==null?'? (grader failed)':(c.met?'✓':'✗'))+' ['+c.points+'] '+c.criterion).join('\n');return `Q${r.i} — HealthBench rubric score ${r.score}% (${r.achieved}/${r.total} pts)\n\nConversation:\n${conv}\n\nModel response:\n${r.response||''}\n\nRubric (${(r.criteria||[]).length} criteria):\n${cr}`;}
+function mcqText(r){const opts=r.options||{};const ol=Object.keys(opts).map(k=>k+'. '+opts[k]).join('\n');const tm=timingParts(r).join(' · ');
+  return `Q${r.i} [${r.ok?'CORRECT':'WRONG'}]  model=${r.pred}  gold=${r.gold}${tm?'\ntiming: '+tm:''}\n\n${r.question}\n${ol}\n\nmodel output:\n${r.answer||''}`;}
+function mcqRow(r){
+  const opts=r.options||{};
+  const ol=Object.keys(opts).map(k=>{const hl=k===r.gold?'background:rgba(12,206,107,.12);border-color:rgba(12,206,107,.45)':(k===r.pred?'background:rgba(255,77,79,.10);border-color:rgba(255,77,79,.45)':'');
+    return `<div style="border:1px solid #232326;border-radius:6px;padding:5px 9px;margin:3px 0;font-size:12px;${hl}"><b>${esc(k)}.</b> ${esc(opts[k])}${k===r.gold?' ✓':''}${(k===r.pred&&k!==r.gold)?' ⟵ model':''}</div>`;}).join('');
+  return `<details data-i="${r.i}" style="border:1px solid #1d1d20;border-radius:10px;padding:10px 12px;margin:8px 0"><summary style="cursor:pointer;display:flex;align-items:center;gap:8px"><span class="mk ${r.ok?'ok':'no'}">${r.ok?'✓':'✗'}</span> <b>Q${r.i}</b> — model <b>${esc(r.pred)}</b> · gold <b>${esc(r.gold)}</b><button class="iconbtn xs" style="margin-left:auto" onclick="event.preventDefault();event.stopPropagation();copy(mcqText(DET[${DET.indexOf(r)}]),'Q${r.i} copied')">⧉ copy full</button></summary><div style="margin:8px 0;font-size:13px;line-height:1.55">${esc(r.question)}</div>${ol}${timingLine(r)}<div style="margin-top:8px"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">model output (full)</div><pre class="ans" style="max-height:300px">${esc(r.answer||'')}</pre></div></details>`;
+}
+function hbRow(r){
+  const cr=(r.criteria||[]).map(c=>{const mk=c.met==null  // met:null + error = the grader itself failed on this criterion
+      ?'<span class="mk" style="background:rgba(245,166,35,.15);color:var(--warn)" title="grader failed for this criterion — not scored">?</span>'
+      :`<span class="mk ${c.met?'ok':'no'}">${c.met?'✓':'✗'}</span>`;
+    return `<div style="display:flex;gap:8px;padding:5px 0;font-size:12px;border-top:1px solid #1a1a1c">${mk}<span class="mono" style="min-width:38px;color:${c.points>0?'var(--ok)':'var(--dang)'}">${c.points>0?'+':''}${c.points}</span><span>${esc(c.criterion)}<div class="muted" style="margin-top:2px">${esc(c.explanation||(c.met==null?'grader error: '+(c.error||'unknown'):''))}</div></span></div>`;}).join('');
+  const conv=esc((r.conversation||[]).map(m=>m.role+': '+m.content).join('  /  ')).slice(0,900);
+  return `<details style="border:1px solid #1d1d20;border-radius:10px;padding:10px 12px;margin:8px 0"><summary style="cursor:pointer"><b>Q${r.i}</b> — score <b style="color:${r.score>=25?'var(--ok)':'var(--warn)'}">${r.score}%</b> (${r.achieved}/${r.total} pts)</summary><div style="margin:8px 0;font-size:12px;line-height:1.5;color:#aaa">${conv}</div><div style="margin:8px 0;font-size:13px;line-height:1.55;border-left:2px solid var(--acc);padding-left:10px"><b>model's response:</b><br>${esc(r.response||'')}</div><div style="margin-top:8px"><b style="font-size:12px">rubric (${(r.criteria||[]).length} criteria):</b>${cr}</div></details>`;
+}
+
+/* ---------- debug drawer ---------- */
+function toggleDbg(){DBG.open=!DBG.open;$('dbg').classList.toggle('open',DBG.open);if(DBG.open)dbgRender();}
+function dbgTab(t){DBG.tab=t;document.querySelectorAll('.dbgh [data-d]').forEach(b=>b.classList.toggle('on',b.dataset.d===t));dbgRender();}
+async function dbgRender(){const b=$('dbgBody');
+  if(DBG.tab==='timeline'){const evs=STREAM.events||[],a=ACT||{},lv=STREAM.live||{};
+    const head='# correlated event timeline'+(lv.tag?' · '+lv.tag+' · '+nice(lv.benchmark||'')+' · '+(lv.mode||''):'')+'\n';
+    const rows=evs.map(e=>{const t=timingParts(e).join(' · ');return 'Q'+String(e.i).padStart(2)+' '+(e.ok?'OK':'XX')+' pred='+e.pred+' gold='+e.gold+' acc='+e.acc+'% | wall '+e.t+'s'+(t?' | '+t:'');});
+    b.textContent=head+(rows.join('\n')||'(no events yet)')+'\n\n# live now: phase='+a.phase+' gen='+a.gen+' chunk='+a.chunk_tps+' avg='+a.avg_tps+' t/s · log age '+a.age+'s';return;}
+  if(DBG.tab==='snap'){b.textContent=JSON.stringify({live:LIVE,stream_live:STREAM.live,sys:SYS,activity:ACT,history_pts:(HISTM||[]).length},null,2);return;}
+  try{const r=await fetch('/api/log?which='+DBG.tab).then(r=>r.json());b.textContent=r.text||'(empty)';b.scrollTop=b.scrollHeight;}catch(e){b.textContent='error loading log';}}
+function dbgCopy(){copy($('dbgBody').textContent,'Debug '+DBG.tab+' copied');}
+
+/* ---------- chat console ---------- */
+let CHAT={msgs:[],busy:false,abort:null};
+function chatToggle(){const w=$('chatwrap');const open=!w.classList.contains('open');w.classList.toggle('open',open);if(open){chatRender();chatStatus();setTimeout(()=>$('chatInput').focus(),60);}}
+function chatFull(){$('chatpanel').classList.toggle('full');}
+function chatClear(){if(CHAT.busy)chatStop();CHAT.msgs=[];chatRender();}
+function chatAutogrow(t){t.style.height='auto';t.style.height=Math.min(170,t.scrollHeight)+'px';}
+function chatKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();chatSend();}}
+function chatSetStatus(up){const e=$('chatStatus');if(!e||CHAT.busy)return;e.textContent=up?'● model online':'● model offline — start it from Control';e.style.color=up?'var(--ok)':'var(--dang)';$('chatSend').disabled=!up;}
+async function chatStatus(){try{const s=await fetch('/api/server/status').then(r=>r.json());chatSetStatus(s.up);}catch(e){}}
+function chatExample(b){const i=$('chatInput');i.value=b.textContent;chatAutogrow(i);i.focus();}
+function chatEmpty(){const ex=['Explain how a hash map works, with a worked example.','Write a function that returns the nth Fibonacci number.','What trade-offs separate TCP from UDP?'];
+  const m=(META&&META.model)?esc(META.model):'the model';
+  return `<div class="chatempty"><h3>Chat with ${m}</h3><p class="muted">Your local model, served on the OpenAI-compatible endpoint. Toggle thinking for chain-of-thought reasoning.</p><div class="exq">${ex.map(q=>`<button onclick="chatExample(this)">${esc(q)}</button>`).join('')}</div></div>`;}
+function mdRender(t){try{return DOMPurify.sanitize(marked.parse(t||''));}catch(e){return esc(t||'').replace(/\n/g,'<br>');}}
+function splitThink(raw){const o=raw.search(/<think>/i);if(o<0)return {think:'',answer:raw};
+  const open=raw.match(/<think>/i)[0];const after=raw.slice(o+open.length);const c=after.search(/<\/think>/i);
+  if(c<0)return {think:after,answer:''};const close=after.match(/<\/think>/i)[0];
+  return {think:after.slice(0,c),answer:(raw.slice(0,o)+after.slice(c+close.length))};}
+function chatBotInner(m){const sp=m.streaming?splitThink(m.raw):{think:m.think,answer:m.answer};
+  let h='';const ans=(sp.answer||'').trim();
+  if(sp.think&&sp.think.trim())h+=`<details class="reason"${(m.streaming&&!ans)?' open':''}><summary>reasoning${(m.streaming&&!ans)?' · thinking…':''}</summary><div class="rbody">${esc(sp.think.trim())}</div></details>`;
+  h+=ans?mdRender(ans):(m.streaming?'<span class="cursor"></span>':'');
+  return h;}
+function chatBubble(m){if(m.role==='user')return `<div class="cmsg user"><div class="av">you</div><div class="body">${esc(m.content).replace(/\n/g,'<br>')}</div></div>`;
+  const sid=m.streaming?' id="cmsg-stream"':'';
+  return `<div class="cmsg bot"${sid}><div class="av">ai</div><div class="body">${chatBotInner(m)}</div></div>`+chatMeta(m);}
+function chatMeta(m){if(m.streaming||!m.dt)return '';return `<div class="cmeta">${m.toks||0} tok · ${m.dt.toFixed(1)}s · ${(m.toks/Math.max(m.dt,0.1)).toFixed(1)} t/s${(m.think&&m.think.trim())?' · reasoned':''}</div>`;}
+function chatRender(){const c=$('chatmsgs');if(!CHAT.msgs.length){c.innerHTML=chatEmpty();return;}c.innerHTML=CHAT.msgs.map(chatBubble).join('');chatDecorate();chatScroll();}
+function chatUpdateStreaming(bot){const el=document.querySelector('#cmsg-stream .body');if(!el)return;el.innerHTML=chatBotInner(bot);chatDecorate();const dt=(performance.now()-bot.t0)/1000;const e=$('chatStatus');if(e){e.textContent='generating · '+bot.toks+' tok · '+(bot.toks/Math.max(dt,0.1)).toFixed(1)+' t/s';e.style.color='var(--mut)';}chatScroll(true);}
+function chatDecorate(){document.querySelectorAll('#chatmsgs pre code').forEach(c=>{if(c.dataset.hl)return;c.dataset.hl=1;try{if(window.hljs)hljs.highlightElement(c);}catch(e){}});
+  document.querySelectorAll('#chatmsgs pre').forEach(pre=>{if(pre.dataset.cc)return;pre.dataset.cc=1;const code=pre.querySelector('code');const txt=(code||pre).innerText;const b=document.createElement('button');b.className='codecopy';b.textContent='copy';b.onclick=()=>copy(txt,'Code copied');pre.appendChild(b);});}
+function chatScroll(soft){const c=$('chatmsgs');if(!c)return;if(soft&&c.scrollHeight-c.scrollTop-c.clientHeight>140)return;c.scrollTop=c.scrollHeight;}
+function chatSendOrStop(){if(CHAT.busy)chatStop();else chatSend();}
+function chatStop(){if(CHAT.abort)try{CHAT.abort.abort();}catch(e){}}
+async function chatSend(){
+  const inp=$('chatInput');const text=(inp.value||'').trim();if(!text||CHAT.busy)return;
+  CHAT.msgs.push({role:'user',content:text});inp.value='';chatAutogrow(inp);
+  const bot={role:'assistant',raw:'',think:'',answer:'',streaming:true,toks:0,t0:performance.now()};
+  CHAT.msgs.push(bot);CHAT.busy=true;const sb=$('chatSend');sb.disabled=false;sb.textContent='■';sb.classList.add('stop');
+  chatRender();chatScroll();setText('chatStatus','generating…');$('chatStatus').style.color='var(--mut)';
+  const payload={think:$('chatThink').checked,max_tokens:1024,
+    messages:CHAT.msgs.slice(0,-1).map(m=>({role:m.role,content:m.role==='assistant'?(m.answer||''):m.content}))};
+  CHAT.abort=new AbortController();
+  try{
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:CHAT.abort.signal});
+    if(!resp.ok||!resp.body){let err='request failed';try{err=(await resp.json()).error||err;}catch(e){}bot.raw='error: '+err;}
+    else{const reader=resp.body.getReader();const dec=new TextDecoder();let buf='',last=0;
+      while(true){const {value,done}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});
+        let idx;while((idx=buf.indexOf('\n\n'))>=0){const ln=buf.slice(0,idx).trim();buf=buf.slice(idx+2);
+          if(!ln.startsWith('data:'))continue;try{const o=JSON.parse(ln.slice(5).trim());if(o.t){bot.raw+=o.t;bot.toks++;}if(o.error)bot.raw+='\n\nerror: '+o.error;}catch(e){}}
+        const now=performance.now();if(now-last>55){last=now;chatUpdateStreaming(bot);}}}
+  }catch(e){if(e.name!=='AbortError')bot.raw+='\n\nerror: '+e;}
+  const sp=splitThink(bot.raw);bot.think=sp.think;bot.answer=sp.answer?sp.answer:(sp.think?'':bot.raw);
+  if(!(bot.answer||'').trim()&&!(bot.think||'').trim())bot.answer='_(no output)_';
+  bot.streaming=false;bot.dt=(performance.now()-bot.t0)/1000;
+  CHAT.busy=false;CHAT.abort=null;sb.textContent='↑';sb.classList.remove('stop');sb.disabled=false;
+  chatRender();chatScroll();chatStatus();inp.focus();
+}
+
+/* ---------- meta wiring (title/model/host — all auto-detected) ---------- */
+function applyMeta(){
+  setText('pageTitle',(META.title||'benchy')+(META.model?(' · '+META.model):''));
+  if(META.subtitle)setText('pageSub',META.subtitle);
+  setText('baselineTagTxt',META.baseline_tag||'baseline');
+  const ct=$('chatTtl');if(ct)ct.innerHTML=(META.model?esc(META.model)+' · ':'')+'chat <span class="ep">'+esc((META.server||'')+'/v1')+'</span>';
+}
+
+/* ---------- guided setup ---------- */
+let SETUP={refs:{}};
+function openSetup(){
+  $('setupModal').style.display='block';modalOpened('setupModal');
+  fetch('/api/config').then(r=>r.json()).then(cfg=>{
+    SETUP.refs={};const cr=cfg.references||{};
+    for(const b in cr)SETUP.refs[b]=(cr[b]||[]).map(r=>({label:r.label,acc:r.accuracy,kind:r.kind||'ref',source:r.source||''}));
+    $('setTitle').value=cfg.title||'';$('setBaseline').value=cfg.baseline_tag||'';
+    const host=META.host||{};
+    const det=[['Model',META.model||'— (start the server)'],['Host',[host.cpu||host.machine,host.mem_total_gb?host.mem_total_gb+' GB RAM':'',host.os].filter(Boolean).join(' · ')||'—'],['Server',META.server||'—']];
+    $('setupDetected').innerHTML=det.map(([k,v])=>`<span class="chip"><b>${esc(k)}</b> ${esc(v)}</span>`).join('');
+    const benches=[...new Set([...(META.benchmarks||[]),...Object.keys(SETUP.refs)])].filter(Boolean);
+    $('refBench').innerHTML=benches.length?benches.map(b=>`<option value="${esc(b)}">${esc(nice(b))}</option>`).join(''):'<option value="">— no benchmarks yet —</option>';
+    renderRefList();
+  }).catch(()=>toast('Could not load config',1));
+}
+function closeSetup(){$('setupModal').style.display='none';modalClosed();}
+function renderRefList(){
+  const benches=Object.keys(SETUP.refs).filter(b=>(SETUP.refs[b]||[]).length);
+  if(!benches.length){$('refList').innerHTML='<div class="muted" style="font-size:12px">No reference baselines yet — add one above, or leave empty to just compare your own runs.</div>';return;}
+  $('refList').innerHTML=benches.map(b=>`<div class="refbench">${esc(nice(b))}</div>`+SETUP.refs[b].map((r,i)=>`<div class="refrow"><span class="tag ${r.kind==='frontier'?'pur':(r.kind==='chance'?'':'blue')}">${esc(r.kind)}</span><b>${esc(r.label)}</b><span class="mono muted">${r.acc}%</span><button class="rm" title="remove" onclick="setupDelRef('${esc(b)}',${i})" aria-label="close">×</button></div>`).join('')).join('');
+}
+function setupAddRef(){
+  const b=$('refBench').value,lbl=($('refLabel').value||'').trim(),acc=parseFloat($('refAcc').value),kind=$('refKind').value;
+  if(!b){toast('Pick a benchmark first',1);return;}
+  if(!lbl){toast('Add a label',1);return;}
+  if(isNaN(acc)||acc<0||acc>100){toast('Score must be 0–100',1);return;}
+  (SETUP.refs[b]=SETUP.refs[b]||[]).push({label:lbl,acc:acc,kind:kind});
+  $('refLabel').value='';$('refAcc').value='';renderRefList();
+}
+function setupDelRef(b,i){SETUP.refs[b].splice(i,1);if(!SETUP.refs[b].length)delete SETUP.refs[b];renderRefList();}
+async function setupSave(){
+  const references={};
+  for(const b in SETUP.refs)references[b]=(SETUP.refs[b]||[]).map(r=>({label:r.label,accuracy:r.acc,kind:r.kind,source:r.source||''}));
+  const body={title:$('setTitle').value||'',baseline_tag:$('setBaseline').value||'',references:references};
+  try{const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+    if(r.ok){toast('Settings saved ✓');closeSetup();loadAll();}else toast('Save failed',1);
+  }catch(e){toast('Save failed',1);}
+}
+
+/* ---------- benchmark browser ---------- */
+let BENCH={data:null,timer:null};
+function openBenchmarks(){$('benchModal').style.display='block';modalOpened('benchModal');loadBench();}
+function closeBenchmarks(){$('benchModal').style.display='none';modalClosed();if(BENCH.timer){clearInterval(BENCH.timer);BENCH.timer=null;}}
+async function loadBench(){
+  try{BENCH.data=await fetch('/api/benchmarks').then(r=>r.json());}catch(e){$('benchList').innerHTML='<div class="muted">could not load registry</div>';return;}
+  renderBench();
+  if(BENCH.data.fetching&&!BENCH.timer)BENCH.timer=setInterval(loadBench,2500);
+  if(!BENCH.data.fetching&&BENCH.timer){clearInterval(BENCH.timer);BENCH.timer=null;loadAll();}
+}
+function lockTag(l){
+  if(l==='drift')return '<span class="tag warn" title="data file no longer matches benchmarks.lock.json — python3 api.py verify &lt;key&gt; restores the pinned snapshot">drift</span>';
+  if(l==='locked')return '<span class="tag" title="pinned in benchmarks.lock.json — the content hash is verified before every run">locked</span>';
+  return '<span class="tag" style="opacity:.55" title="no content hash pinned yet — fetching locks it">unpinned</span>';
+}
+function benchItem(b,fetching){
+  const fit=b.fit==='code'?'<span class="tag" title="generates code, executed against tests (pass@1)">code</span>':'';
+  const base=b.baselines?`<span class="tag pur" title="${b.baselines} published frontier baselines ship for this benchmark">baselines</span>`:'';
+  return `<div class="benchrow"><div style="min-width:0;flex:1"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="bn">${esc(b.name)}</span><span class="dom">${esc(b.domain)}</span>${fit}${base}${lockTag(b.lock)}</div>
+    <div class="muted" style="font-size:11.5px;margin-top:2px;line-height:1.45">${esc(b.desc||'')}</div></div>
+    <span class="br">${b.present?'<span class="tag ok">✓ installed</span>':`<button class="btn g" ${fetching?'disabled':''} onclick="fetchBench('${esc(b.key)}')">fetch</button>`}</span></div>`;
+}
+function renderBench(){
+  const d=BENCH.data||{},av=d.available||[],fetching=d.fetching;
+  const cur=av.filter(b=>b.tier==='current'),leg=av.filter(b=>b.tier!=='current');
+  const curMissing=cur.filter(b=>!b.present).length;
+  const fetchErr=d.fetch_error?'<span style="color:var(--dang)" title="see results/fetch.log for the full output">last fetch failed: '+esc(d.fetch_error)+'</span> · ':'';
+  $('benchStatus').innerHTML=fetching?'<span class="livedot"></span> fetching… (files appear as they finish)':(fetchErr+av.filter(b=>b.present).length+' of '+av.length+' installed · '+curMissing+' current not yet fetched');
+  $('benchAll').disabled=fetching||!curMissing;$('benchAll').textContent=curMissing?('Fetch current set ('+curMissing+')'):'Current set installed';
+  const sec=(label,arr)=>arr.length?`<div class="refbench" style="margin-top:12px">${label}</div>`+arr.map(b=>benchItem(b,fetching)).join(''):'';
+  $('benchList').innerHTML=sec('Current — discriminating for mid-2026 models',cur)+sec('Legacy / saturated — small-model regression only',leg);
+  const man=d.manual||[];
+  $('benchManual').innerHTML=man.length?('<div class="refbench">Manual / gated — see DATA.md</div>'+man.map(m=>`<div class="benchrow" style="opacity:.75"><div style="flex:1;min-width:0"><span class="bn mono" style="font-size:12px">${esc(m.key)}</span><div class="muted" style="font-size:11.5px;margin-top:2px;line-height:1.45">${esc(m.desc||m.note||'')}</div></div></div>`).join('')):'';
+}
+async function fetchBench(key){
+  let keys;
+  if(key==='__current__')keys=(BENCH.data.available||[]).filter(b=>b.tier==='current'&&!b.present).map(b=>b.key);
+  else if(key==='__missing__')keys=(BENCH.data.available||[]).filter(b=>!b.present).map(b=>b.key);
+  else keys=[key];
+  if(!keys.length){toast('Nothing to fetch');return;}
+  try{const r=await fetch('/api/benchmarks/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys})}).then(r=>r.json());
+    if(r.ok){toast('Fetching '+keys.length+' benchmark'+(keys.length>1?'s':'')+'…');loadBench();}
+    else toast(r.error||'fetch failed',1);
+  }catch(e){toast('fetch failed',1);}
+}
+
+/* ---------- polling ---------- */
+let _pulseFails=0,_since=0;
+function errBar(msg){const e=$('errbar');if(!e)return;if(msg){e.textContent=msg;e.style.display='block';}else e.style.display='none';}
+/* ONE request per tick: /api/pulse carries live+stream+sys+activity+server plus the metrics-history
+   rows newer than our cursor ('hist'); we append them to the local buffer (cap 900 = the server's
+   ring) and echo d.now back as the next since — no full-history refetch every 1.5s. */
+async function pulse(){try{
+  const d=await fetch('/api/pulse?since='+_since).then(r=>r.json());
+  LIVE=d.live||{};STREAM=d.stream||{};ACT=d.activity||{};SYS=d.sys||{};
+  if(d.hist&&d.hist.length)HISTM=HISTM.concat(d.hist).slice(-900);
+  if(d.now)_since=d.now;
+  streamUI();activityUI();systemUI();experimentBand();firstRunUI();syncBench();
+  const up=!!(d.server&&d.server.up);$('srvPill').textContent=up?'online':'offline';$('srvPill').className='tag '+(up?'ok':'dang');
+  $('srvBtn').style.display=up?'none':'inline-block';
+  if($('chatwrap').classList.contains('open'))chatSetStatus(up);
+  if(DBG.open)dbgRender();
+  _pulseFails=0;errBar(null);
+}catch(e){if(++_pulseFails>=3)errBar('dashboard unreachable — '+_pulseFails+' consecutive poll failures (is dashboard.py still running?)');}}
+// shared option builder: group keys by tier (current → legacy → third), registry order within each
+function tieredOptions(keys,cur,thirdLabel){
+  const g={current:[],legacy:[],other:[]};
+  keys.forEach(b=>{const t=regTier(b);g[(t==='current')?'current':(t==='legacy'?'legacy':'other')].push(b);});
+  const ord=b=>(REGMAP[b]&&REGMAP[b].ord!=null)?REGMAP[b].ord:999;
+  const og=(lab,arr)=>{if(!arr.length)return '';arr.sort((a,b)=>ord(a)-ord(b));
+    return '<optgroup label="'+lab+'">'+arr.map(b=>'<option value="'+esc(b)+'"'+(b===cur?' selected':'')+'>'+esc(regName(b))+((REGMAP[b]&&REGMAP[b].fit==='code')?' ·code':'')+'</option>').join('')+'</optgroup>';};
+  return og('current (recommended)',g.current)+og('legacy / saturated',g.legacy)+og(thirdLabel||'other',g.other);
+}
+function fillRunMenu(){
+  const rb=$('rBench');if(!rb)return;const cur=rb.value,opts=(META.benchmarks||[]),sig=opts.join(',');
+  if(rb.dataset.sig===sig){if(cur&&opts.includes(cur))rb.value=cur;return;}
+  rb.dataset.sig=sig;
+  rb.innerHTML=opts.length?tieredOptions(opts,cur,'other / custom'):'<option value="">no benchmarks — fetch from Benchmarks</option>';
+  if(cur&&opts.includes(cur))rb.value=cur;updateRunDesc();
+}
+function updateRunDesc(){const d=$('runDesc'),b=($('rBench')&&$('rBench').value);if(d)d.textContent=b?regDesc(b):'';}
+function syncAccToRun(){const rv=($('rBench')&&$('rBench').value),ab=$('accBench');
+  if(rv&&ab&&[...ab.options].some(o=>o.value===rv)){ab.value=rv;accBenchUser=true;accbars();}}
+async function loadAll(){try{
+  let BENCH;
+  [RUNS,PERF,META,SUMMARY,BENCH]=await Promise.all([fetch('/api/runs').then(r=>r.json()),fetch('/api/perf').then(r=>r.json()),fetch('/api/meta').then(r=>r.json()),fetch('/api/summary').then(r=>r.json()),fetch('/api/benchmarks').then(r=>r.json())]);
+  indexRuns();
+  REGMAP={};(BENCH.available||[]).concat(BENCH.manual||[]).forEach((b,i)=>{REGMAP[b.key]={name:b.name||NICE[b.key]||b.key,tier:b.tier||'manual',fit:b.fit||'',desc:b.desc||'',domain:b.domain||'',ord:i};});
+  applyMeta();
+  fillRunMenu();
+  const benches=[...new Set([...RUNS.map(r=>r.benchmark),...Object.keys(META.references||{}),...(META.benchmarks||[])])].filter(Boolean);
+  const ab=$('accBench'),cur=ab.value,asig=benches.join(',');if(ab.dataset.sig!==asig){ab.innerHTML=tieredOptions(benches,cur,'reference / gated');if(cur)ab.value=cur;ab.dataset.sig=asig;}
+  envStrip();experimentBand();firstRunUI();syncBench();
+  const sig=RUNS.length+'|'+PERF.length+'|'+(RUNS.length?RUNS[RUNS.length-1].ts:'')+'|'+JSON.stringify(SUMMARY.macro||{})+'|'+JSON.stringify(META.references||{});   // references too: saving baselines in Setup must re-render Accuracy
+  if(sig!==_dataSig){_dataSig=sig;accbars();renderRuns();populateCompare();}
+}catch(e){console.error(e)}}
+loadAll();setInterval(loadAll,6000);pulse();setInterval(pulse,1500);
+</script></body></html>

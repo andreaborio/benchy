@@ -1,0 +1,31 @@
+Third-party assets vendored under static/vendor/ (pinned versions, served same-origin by
+dashboard.py so the dashboard runs fully offline). Each file keeps its upstream license
+banner. The files were fetched from cdn.jsdelivr.net at the exact versions below on
+2026-06-10; the sha384 digest of each vendored file (openssl dgst -sha384 -binary | base64)
+is recorded here so the bytes in the repo can be re-verified at any time.
+
+Chart.js 4.4.1 (chart.umd.min.js)
+  License: MIT
+  Source:  https://github.com/chartjs/Chart.js
+  Fetched: https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
+  sha384:  sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4
+
+marked 12.0.2 (marked.min.js)
+  License: MIT
+  Source:  https://github.com/markedjs/marked
+  Fetched: https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js
+  sha384:  sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi
+
+DOMPurify 3.4.9 (purify.min.js)
+  License: Apache-2.0 OR MPL-2.0 (dual-licensed)
+  Source:  https://github.com/cure53/DOMPurify
+  Fetched: https://cdn.jsdelivr.net/npm/dompurify@3.4.9/dist/purify.min.js
+  sha384:  sha384-6ZdfL2Azuen6KYvcTkbxqJS1d7txbNWrVfmURkxNeCn7DtzhLRL6Fi6WGG6ZLdKn
+
+highlight.js 11.11.1 (highlight.min.js, github-dark.min.css)
+  License: BSD-3-Clause
+  Source:  https://github.com/highlightjs/highlight.js
+  Fetched: https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js
+           https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github-dark.min.css
+  sha384:  highlight.min.js     sha384-RH2xi4eIQ/gjtbs9fUXM68sLSi99C7ZWBRX1vDrVv6GQXRibxXLbwO2NGZB74MbU
+           github-dark.min.css  sha384-wH75j6z1lH97ZOpMOInqhgKzFkAInZPPSPlZpYKYTOqsaizPvhQZmAtLcPKXpLyH
