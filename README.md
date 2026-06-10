@@ -4,8 +4,8 @@
 
 `benchy` runs a panel of question-answering benchmarks against any OpenAI-compatible
 inference server, scores them deterministically, and shows the results — accuracy,
-confidence intervals, per-question drill-down, and live system metrics — in a single-file
-web dashboard. The model id is **auto-detected** from the server and the scoring core runs
+confidence intervals, per-question drill-down, and live system metrics — in a
+single-command, zero-dependency web dashboard. The model id is **auto-detected** from the server and the scoring core runs
 anywhere Python does; nothing about your model is hardcoded, so you clone it and run. (The
 *live host-metrics* panels are macOS-oriented — see [Methodology](#methodology--caveats-read-before-quoting-numbers).)
 
@@ -47,16 +47,19 @@ LM Studio / [ds4](#works-with-any-openai-compatible-server) — anything that se
 - **`think` / `no-think` modes** — toggle server-side reasoning to measure the
   test-time-reasoning delta (sent as a `think` field; servers that don't use it ignore it).
 - **Zero pip dependencies** for the core — Python standard library only. (HealthBench
-  grading needs one API key; the dashboard charts load Chart.js from a CDN — if offline, the
-  charts are skipped and the rest of the UI still works.)
+  grading needs one API key; the dashboard's third-party assets — Chart.js, marked,
+  DOMPurify, highlight.js — are vendored under `static/vendor/` (pinned versions, licenses
+  in `NOTICE`), so the dashboard is fully offline: no CDN, no Google Fonts, no external
+  requests at all.)
 
 ## Why benchy
 
-A **local, single-file companion** to your inference server, built for the tight
+A **local, single-command, zero-dependency companion** to your inference server, built for the tight
 **quantize → measure → compare** loop. What it's good at:
 
-- **Zero-friction & self-contained** — one `dashboard.py`, Python standard library only, no
-  `pip install`, no config to write. Clone and run next to whatever server you already have.
+- **Zero-friction & self-contained** — one command, `python3 dashboard.py` (the web UI ships
+  alongside in `dashboard.html`), Python standard library only, no `pip install`, no config
+  to write. Clone and run next to whatever server you already have.
 - **Live, not batch** — a real-time per-question feed, running accuracy, and live host/server
   metrics (decode t/s, model RSS, memory) *while the eval runs*: you watch the model work,
   not just read a final number.
@@ -106,17 +109,21 @@ python3 fetch_benchmarks.py list                 # see what's available (tiered)
 python3 fetch_benchmarks.py current              # fetch the recommended current set
 #   …or pick specific ones: python3 fetch_benchmarks.py mmlu_pro humaneval medqa_test
 #   …or use the ⬇ Benchmarks button in the dashboard.
+#   Fetching pins each set's upstream revision + content hash into benchmarks.lock.json
+#   (the lock contract — explicit form: python3 api.py lock <keys>). Runners verify the
+#   lock at runtime and abort on drift (BENCHY_SKIP_LOCK_CHECK=1 to bypass).
 
 # 2. Start any OpenAI-compatible server on :8000 (whatever you use)
 #    e.g. llama-server -m model.gguf --port 8000   (or vLLM / Ollama / LM Studio / ds4)
 
 # 3. Run a multiple-choice benchmark
-#    eval_mcq.py <data.jsonl> <N> [think|nothink] [tag] [notes...]
+#    eval_mcq.py <data.jsonl> <N> <think|nothink> <tag> [--seed INT]
 python3 eval_mcq.py data/mmlu_pro.jsonl 60 think run1
 
 # 4. (optional) Run HealthBench — rubric-graded, needs an API key for the grader
+#    healthbench.py <hard|consensus> <N> <think|nothink> <tag> [--seed INT]
 echo "sk-..." > .apikey            # grader key (OpenAI/Anthropic/Google auto-detected); chmod 600
-python3 healthbench.py 20 run1 think hard
+python3 healthbench.py hard 20 think run1
 
 # 5. Open the live dashboard
 python3 dashboard.py 8050          # → http://localhost:8050
@@ -164,7 +171,10 @@ Fetchable via `fetch_benchmarks.py` / the dashboard (MCQ sets normalised to
 `{question, options{A..}, answer_idx}`; code sets executed for pass@1). Each is tagged
 **current** (still discriminates strong mid-2026 models) or **legacy** (saturated — top
 models near ceiling, useful only as a small/quantized-model regression check). Fetch the
-recommended set with `python3 fetch_benchmarks.py current` or the dashboard's **⬇ Benchmarks**.
+recommended set with `python3 fetch_benchmarks.py current` or the dashboard's **⬇ Benchmarks**
+(both go through the lock contract: each fetch pins the upstream revision + content hash into
+`benchmarks.lock.json`, which the runners verify at run time — see
+[Reproducible snapshots](#reproducible-snapshots--apipy--the-lockfile)).
 
 **Current (recommended):**
 
@@ -212,7 +222,8 @@ the live source. See the existing files in `benchmarks/` as templates.
 **Health check.** `python3 healthcheck.py` probes one row of every benchmark and runs its
 normalizer, so a renamed/changed upstream dataset is caught before it breaks a run; it also
 flags lock drift. It runs in CI weekly and on every registry edit
-(`.github/workflows/benchmarks-healthcheck.yml`).
+(`.github/workflows/benchmarks-healthcheck.yml`). `python3 healthcheck.py --local` audits
+the already-fetched files against `benchmarks.lock.json` offline (no network at all).
 
 **Manual / gated:** **GPQA** Diamond (the frontier science discriminator — gated, needs a HF
 token), **HLE** (gated, mostly free-form/multimodal), and **HealthBench** (rubric-graded, run

@@ -1,0 +1,22 @@
+name: tests
+
+# Run the offline unit-test suite on every push and PR (no path filter: any change can
+# break a test). Matrix covers the oldest and newest Python versions we support.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Unit tests
+        run: python3 -m unittest discover -s . -p 'test_*.py' -v

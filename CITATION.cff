@@ -1,13 +1,14 @@
 cff-version: 1.2.0
 message: "If you use benchy in your work, please cite it as below."
 title: benchy
-abstract: "A local LLM benchmark suite and live dashboard: runs a panel of question-answering benchmarks against any OpenAI-compatible inference server, scores them deterministically (Wilson CIs, letter-bias checks), and shows results in a single-file web UI with auto-detected model/host."
+abstract: "A local LLM benchmark suite and live dashboard: runs a panel of question-answering benchmarks against any OpenAI-compatible inference server, scores them deterministically (Wilson CIs, letter-bias checks), and shows results in a zero-dependency web UI (dashboard.py + dashboard.html) with auto-detected model/host."
 type: software
 authors:
   - family-names: Borio
     given-names: Andrea
 license: MIT
-date-released: "2026-06-09"
+version: 0.2.0
+date-released: "2026-06-10"
 repository-code: "https://github.com/andreaborio/benchy"
 keywords:
   - llm

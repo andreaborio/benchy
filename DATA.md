@@ -38,6 +38,25 @@ Tier is **current** (discriminates mid-2026 models) or **legacy** (saturated —
 `MMLU — medical cluster` = anatomy, clinical_knowledge, college_biology, college_medicine,
 medical_genetics, professional_medicine. (`fetch_benchmarks.py current` grabs the current tier.)
 
+## Pinned snapshots
+
+Fetched sets are pinned in `benchmarks.lock.json` (tracked in git): per benchmark it records
+the upstream HF dataset revision (`upstream_sha`) and the SHA-256 of the normalized rows
+(`content_sha`), plus the row count. Runners re-hash the local file at startup and **abort on
+any mismatch** — a changed upstream or an edited local file fails loudly instead of silently
+skewing results. `BENCHY_SKIP_LOCK_CHECK=1` downgrades the abort to a warning; the run is then
+recorded with `locked: false`, so treat its numbers accordingly.
+
+HealthBench is fetched outside the lockfile by `healthbench.py`, which pins its snapshot via
+`EXPECTED_SHA256` in the script itself; the **consensus subset is currently unpinned** and
+only runs with `BENCHY_ALLOW_UNPINNED=1` — its content can drift between fetches, so don't
+compare consensus numbers across machines or dates without checking the recorded data hash.
+
+`python3 healthcheck.py --local` audits all present data files against the lock with no
+network access. Note the limits: the pins verify that the bytes you scored are the bytes that
+were locked — they say nothing about upstream *licensing*, and a `relock` deliberately accepts
+whatever upstream now serves.
+
 ## Manual / gated
 
 These are not pulled by `fetch_benchmarks.py` (gated, or a different runner):
