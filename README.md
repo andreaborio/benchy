@@ -132,6 +132,8 @@ python3 dashboard.py 8050          # → http://localhost:8050
 The dashboard can also fetch benchmarks, start/stop the server, and launch runs from the
 browser. **Config:** set `BENCHY_SERVER` (default `http://127.0.0.1:8000`) and
 `BENCHY_MODEL` (default: auto-detected from `/v1/models`) if your setup differs.
+`BENCHY_RESULTS=<dir>` points the dashboard at another checkout's `results/` — useful to
+watch a run launched from a different benchy copy without restarting it.
 
 ## Reproducible snapshots — `api.py` + the lockfile
 

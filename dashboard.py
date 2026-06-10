@@ -32,7 +32,9 @@ import benchy_stats                       # extracted stats core (Wilson/χ²/Mc
 from benchy_stats import read_jsonl, is_rubric, wilson, _chi2_uniform, _mcnemar_p   # re-exported; same names as pre-split
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS = os.path.join(HERE, "results")
+# BENCHY_RESULTS points the dashboard at another checkout's results/ (e.g. to watch a
+# run launched from a different benchy copy); everything live/runs/details follows it.
+RESULTS = os.environ.get("BENCHY_RESULTS") or os.path.join(HERE, "results")
 DATA = os.path.join(HERE, "data")
 RUNS = os.path.join(RESULTS, "runs.jsonl")
 PERF = os.path.join(RESULTS, "perf.jsonl")
