@@ -31,13 +31,17 @@ def main():
     per_bench = {}
     for fn in files:
         b = bench_of(fn)
-        for line in open(fn):
+        for line in open(fn, encoding="utf-8"):
             line = line.strip()
             if not line: continue
             try: r = json.loads(line)
             except Exception: continue
             q = r.get("question", "")
             if not q: continue
+            # error detail rows (error:true, never scored — no "ok") must not consume the
+            # dedup slot, or they'd suppress harvesting the same question from another run
+            # where it WAS answered
+            if r.get("error"): continue
             key = hashlib.md5((b + "|" + q).encode()).hexdigest()
             if key in seen: continue
             seen.add(key)
@@ -50,9 +54,9 @@ def main():
                              "model_predicted": r.get("pred")})
                 per_bench[b] = per_bench.get(b, 0) + 1
 
-    with open(OUT_LORA, "w") as f:
+    with open(OUT_LORA, "w", encoding="utf-8", newline="\n") as f:
         for h in hard: f.write(json.dumps(h) + "\n")
-    with open(OUT_CORPUS, "w") as f:
+    with open(OUT_CORPUS, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n\n".join(corpus))
 
     print(f"detail files read: {len(files)} · unique questions: {len(seen)}")

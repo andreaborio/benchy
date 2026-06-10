@@ -17,15 +17,16 @@ What this adds over the raw fetcher:
 
   • A small, documented surface: registry(), meta(), keys(), fetch(), lock_status().
 
-CLI:
+CLI (<sel> is a key, domain, tier, 'all' or 'everything'; lock/relock/verify take several):
   python3 api.py status                 lock state + drift vs upstream for every set
   python3 api.py prelock [<sel>]        pin upstream revisions WITHOUT downloading data
-  python3 api.py lock [<key|all>]       fetch + lock (pin current upstream) — first time
-  python3 api.py relock <key|all>       bump the lock to the latest upstream + re-hash
-  python3 api.py verify [<key|all>]     re-fetch pinned revision, check the content hash
+  python3 api.py lock [<sel> ...]       fetch + lock (pin current upstream) — first time
+  python3 api.py relock <sel> [...]     bump the lock to the latest upstream + re-hash
+  python3 api.py verify [<sel> ...]     re-fetch pinned revision, check the content hash
 """
-import datetime, hashlib, json, os, sys, urllib.request
+import datetime, json, os, sys, time, urllib.request
 
+import benchy_common as _bc
 import fetch_benchmarks as _fb
 
 API_VERSION = 1
@@ -35,18 +36,44 @@ LOCK_PATH = os.path.join(HERE, "benchmarks.lock.json")
 
 # ---------- lockfile ----------
 def _load_lock():
+    """PURE read: never renames/mutates the lockfile. Concurrent readers (the dashboard's
+    /api/benchmarks, runners' check_dataset_lock) may catch a writer mid-flight; quarantining
+    here would destroy a healthy lockfile. The destructive quarantine lives in
+    _quarantine_corrupt_lock(), called only from the CLI write commands."""
     if os.path.exists(LOCK_PATH):
         try:
-            return json.load(open(LOCK_PATH))
-        except Exception:
-            pass
+            return json.load(open(LOCK_PATH, encoding="utf-8"))
+        except Exception as e:
+            print(f"benchy.api: WARNING lockfile unreadable ({e}) — treating as empty "
+                  f"(read-only; not touching {LOCK_PATH})", file=sys.stderr)
     return {"_api_version": API_VERSION, "benchmarks": {}}
+
+
+def _quarantine_corrupt_lock():
+    """CLI write paths only (lock/relock/verify): if the lockfile is genuinely corrupt,
+    move it aside to .corrupt so the upcoming writes start from a clean slate. Re-reads and
+    re-attempts json.load right here (a previous failed read may have been a writer
+    mid-os.replace); only a load that fails NOW triggers the rename."""
+    if not os.path.exists(LOCK_PATH):
+        return
+    try:
+        with open(LOCK_PATH, encoding="utf-8") as f:
+            json.load(f)
+        return                          # healthy (or healed since the failed read)
+    except Exception as e:
+        corrupt = LOCK_PATH + ".corrupt"
+        try:
+            os.replace(LOCK_PATH, corrupt)  # quarantine for inspection (overwrites an older .corrupt)
+        except OSError:
+            return
+        print(f"benchy.api: WARNING lockfile is corrupt ({e}) — moved to {corrupt}, "
+              f"starting fresh", file=sys.stderr)
 
 
 def _save_lock(lock):
     lock["_api_version"] = API_VERSION
     tmp = LOCK_PATH + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         json.dump(lock, f, indent=2, sort_keys=True)
     os.replace(tmp, LOCK_PATH)
 
@@ -66,13 +93,9 @@ def upstream_sha(dataset, timeout=20):
 
 
 def content_sha(path):
-    if not path or not os.path.exists(path):
-        return None
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for b in iter(lambda: f.read(65536), b""):
-            h.update(b)
-    return h.hexdigest()
+    """Full SHA-256 of a data file — THE lockfile pin. One implementation, shared via
+    benchy_common.sha256_file; runs.jsonl's data_sha is its 12-hex prefix."""
+    return _bc.sha256_file(path)
 
 
 def _data_path(key):
@@ -87,7 +110,7 @@ def data_path(key):
 def _rows(path):
     if not os.path.exists(path):
         return 0
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return sum(1 for ln in f if ln.strip())
 
 
@@ -122,14 +145,64 @@ def current_keys():
     return keys(tier="current")
 
 
-def _write_lock_entry(lock, key, csha, path, keep_rev):
+# cross-process write exclusion around the lockfile read-modify-write (NOT held during
+# downloads). Module-level so tests can shrink the windows.
+_SENTINEL_TIMEOUT_S = 10.0   # how long a writer retries before giving up
+_SENTINEL_STALE_S = 300.0    # a sentinel older than this is from a dead writer — reclaim it
+
+
+def _acquire_write_sentinel(timeout=None, stale_s=None):
+    """Take LOCK_PATH+'.write.lock' via O_CREAT|O_EXCL (atomic on every filesystem we care
+    about). Retries briefly; a sentinel older than `stale_s` is treated as left behind by a
+    crashed writer and removed. Caller MUST remove the returned path in a finally."""
+    timeout = _SENTINEL_TIMEOUT_S if timeout is None else timeout
+    stale_s = _SENTINEL_STALE_S if stale_s is None else stale_s
+    sentinel = LOCK_PATH + ".write.lock"
+    deadline = time.time() + timeout
+    while True:
+        try:
+            fd = os.open(sentinel, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                os.write(fd, f"{os.getpid()} {datetime.datetime.now().isoformat()}\n".encode())
+            finally:
+                os.close(fd)
+            return sentinel
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(sentinel) > stale_s:
+                    os.remove(sentinel)     # stale: its writer died without cleaning up
+                    continue
+            except OSError:
+                continue                    # vanished between EXCL-fail and stat — retry now
+            if time.time() >= deadline:
+                raise LockError(f"could not acquire {sentinel} within {timeout:.0f}s — another "
+                                f"lock/relock/verify is writing; retry, or delete the file if "
+                                f"no benchy process is running")
+            time.sleep(0.05)
+
+
+def _write_lock_entry(key, csha, path, keep_rev):
+    """Persist one benchmark's lock entry with a FRESH single-key read-modify-write.
+    The caller's lock snapshot may be minutes old (loaded before a download), so it is not
+    accepted here — re-reading under the write sentinel means concurrent `api.py lock`
+    writers can no longer drop each other's freshly-pinned keys."""
     dataset = _fb.dataset_of(key)
-    prev = lock["benchmarks"].get(key, {})
+    prev = _load_lock()["benchmarks"].get(key, {})
+    # resolve the revision BEFORE taking the sentinel: upstream_sha is a network call and
+    # the sentinel must only bracket the local read-modify-write
     rev = prev.get("upstream_sha") if (keep_rev and prev.get("upstream_sha")) else upstream_sha(dataset)
-    lock["benchmarks"][key] = {
-        "dataset": dataset, "upstream_sha": rev, "content_sha": csha, "rows": _rows(path),
-        "locked_at": datetime.datetime.now().isoformat(timespec="seconds")}
-    _save_lock(lock)
+    sentinel = _acquire_write_sentinel()
+    try:
+        lock = _load_lock()                 # fresh: pick up keys other writers just saved
+        lock["benchmarks"][key] = {
+            "dataset": dataset, "upstream_sha": rev, "content_sha": csha, "rows": _rows(path),
+            "locked_at": datetime.datetime.now().isoformat(timespec="seconds")}
+        _save_lock(lock)
+    finally:
+        try:
+            os.remove(sentinel)
+        except OSError:
+            pass
 
 
 def fetch(key, update=False, verify=True):
@@ -155,7 +228,7 @@ def fetch(key, update=False, verify=True):
                                 f"({ent['content_sha'][:12]}). `api.py relock {key}` to accept, "
                                 f"or delete data/{key}.jsonl and re-fetch.")
             return path
-        _write_lock_entry(lock, key, csha, path, keep_rev=bool(ent))  # complete a prelock
+        _write_lock_entry(key, csha, path, keep_rev=bool(ent))  # complete a prelock
         return path
 
     rev = None if update else (ent or {}).get("upstream_sha")
@@ -167,7 +240,7 @@ def fetch(key, update=False, verify=True):
         raise LockError(
             f"{key}: fetched rows ({csha[:12]}) differ from the locked snapshot "
             f"({ent['content_sha'][:12]}) — upstream drifted. `api.py relock {key}` to accept.")
-    _write_lock_entry(lock, key, csha, path, keep_rev=bool(ent and not update))
+    _write_lock_entry(key, csha, path, keep_rev=bool(ent and not update))
     return path
 
 
@@ -181,8 +254,8 @@ def prelock(selection=None):
         if k not in _fb.REGISTRY:
             continue
         dataset = _fb.dataset_of(k)
-        sha = upstream_sha(dataset)
         ent = lock["benchmarks"].get(k, {})
+        sha = upstream_sha(dataset) or ent.get("upstream_sha")  # keep the pin if upstream is unreachable
         ent.update({"dataset": dataset, "upstream_sha": sha,
                     "content_sha": ent.get("content_sha"), "rows": ent.get("rows"),
                     "locked_at": datetime.datetime.now().isoformat(timespec="seconds")})
@@ -239,13 +312,28 @@ def _cmd_status(_a):
         print(f"  {r['key']:<15}{r['tier']:<9}{(r['rows'] or '—'):>6}    {lk:^4}  {dr}")
 
 
+def _select_args(args):
+    """Union of one-or-more selections, first-seen order (lock/relock/verify take several)."""
+    if not args:
+        return _select(None)
+    out = []
+    for a in args:
+        out += [k for k in _select(a) if k not in out]
+    return out
+
+
 def _cmd_lock(args):
-    for k in _select(args[0] if args else None):
+    _quarantine_corrupt_lock()      # write entry point: safe to move a corrupt lockfile aside
+    bad = 0
+    for k in _select_args(args):
         try:
             p = fetch(k)
+            if not p:
+                raise LockError("fetch returned no data (upstream unreachable?)")
             print(f"  locked {k} -> {p}")
         except Exception as e:
-            print(f"  ! {k}: {e}")
+            bad += 1; print(f"  ! {k}: {e}")
+    sys.exit(1 if bad else 0)   # non-zero so callers (the dashboard) can surface failures
 
 
 def _cmd_prelock(args):
@@ -254,8 +342,9 @@ def _cmd_prelock(args):
 
 def _cmd_relock(args):
     if not args:
-        sys.exit("usage: api.py relock <key|all|everything>")
-    for k in _select(args[0]):
+        sys.exit("usage: api.py relock <sel> [<sel> ...]")
+    _quarantine_corrupt_lock()      # write entry point: safe to move a corrupt lockfile aside
+    for k in _select_args(args):
         try:
             fetch(k, update=True)
             print(f"  relocked {k}")
@@ -264,13 +353,20 @@ def _cmd_relock(args):
 
 
 def _cmd_verify(args):
+    _quarantine_corrupt_lock()      # write entry point: safe to move a corrupt lockfile aside
     bad = 0
-    for k in _select(args[0] if args else None):
+    for k in _select_args(args):
+        path, bak = _data_path(k), _data_path(k) + ".bak"
         try:
-            os.path.exists(_data_path(k)) and os.remove(_data_path(k))  # force a clean re-fetch
-            fetch(k)
-            print(f"  ok {k}")
+            os.path.exists(path) and os.replace(path, bak)  # keep the original until re-fetch succeeds
+            if fetch(k):
+                os.path.exists(bak) and os.remove(bak)
+                print(f"  ok {k}")
+            else:
+                os.path.exists(bak) and os.replace(bak, path)  # nothing verified — restore
+                bad += 1; print(f"  ! {k}: re-fetch failed (upstream unreachable?) — original restored")
         except Exception as e:
+            os.path.exists(bak) and os.replace(bak, path)
             bad += 1; print(f"  ! {k}: {e}")
     sys.exit(1 if bad else 0)
 

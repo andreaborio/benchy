@@ -2,122 +2,122 @@
   "_api_version": 1,
   "benchmarks": {
     "arc_challenge": {
-      "content_sha": null,
+      "content_sha": "0260fa7dfc64f40292dbb88470d24b0abf22587713356917424e2ff8f78af1f8",
       "dataset": "allenai/ai2_arc",
-      "locked_at": "2026-06-09T23:19:51",
-      "rows": null,
+      "locked_at": "2026-06-10T18:48:12",
+      "rows": 1172,
       "upstream_sha": "210d026faf9955653af8916fad021475a3f00453"
     },
     "commonsense_qa": {
-      "content_sha": null,
+      "content_sha": "b87236b4d1913bd63cc12c5c196155557672a7866ea76e059ff4587658416a02",
       "dataset": "tau/commonsense_qa",
-      "locked_at": "2026-06-09T23:19:52",
-      "rows": null,
+      "locked_at": "2026-06-10T18:48:18",
+      "rows": 1221,
       "upstream_sha": "94630fe30dad47192a8546eb75f094926d47e155"
     },
     "hellaswag": {
-      "content_sha": null,
+      "content_sha": "b6012b5fe9a31e6b1f6d45dac432c39432f1ab1800641a47c74fe09e7a73d63b",
       "dataset": "Rowan/hellaswag",
-      "locked_at": "2026-06-09T23:19:52",
-      "rows": null,
+      "locked_at": "2026-06-10T18:48:22",
+      "rows": 1000,
       "upstream_sha": "218ec52e09a7e7462a5400043bb9a69a41d06b76"
     },
     "humaneval": {
       "content_sha": "3c1ef3a5c5195f1da48c20d5e4f804d115a06475c55a000bff2a0a36e1b2fc87",
       "dataset": "openai/openai_humaneval",
-      "locked_at": "2026-06-09T23:21:38",
+      "locked_at": "2026-06-10T18:48:23",
       "rows": 164,
       "upstream_sha": "7dce6050a7d6d172f3cc5c32aa97f52fa1a2e544"
     },
     "logic": {
       "content_sha": "7cb2b874b40b3781f740b005ae87986ef3524dba255b5cd247e44ab947d5af7d",
       "dataset": "cais/mmlu",
-      "locked_at": "2026-06-09T23:41:28",
+      "locked_at": "2026-06-10T18:48:24",
       "rows": 126,
       "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
     },
     "mbpp": {
       "content_sha": "a850e463e72a2ee8b7a2f483c702d7b85ca023a662287beb4c47fb2a5abcec3c",
       "dataset": "google-research-datasets/mbpp",
-      "locked_at": "2026-06-09T23:21:40",
+      "locked_at": "2026-06-10T18:48:25",
       "rows": 257,
       "upstream_sha": "4bb6404fdc6cacfda99d4ac4205087b89d32030c"
     },
     "medmcqa": {
-      "content_sha": null,
+      "content_sha": "91eadad3e80913eb40671e5573df81482c86473118fa8880a6e29bb3878ac4e1",
       "dataset": "openlifescienceai/medmcqa",
-      "locked_at": "2026-06-09T23:19:51",
-      "rows": null,
+      "locked_at": "2026-06-10T18:48:29",
+      "rows": 800,
       "upstream_sha": "91c6572c454088bf71b679ad90aa8dffcd0d5868"
     },
     "medqa_test": {
-      "content_sha": null,
+      "content_sha": "8fb7e78d4c5c42a9d3fe8a8ccc8518a67302ba639dcecedb9d13f473a0b09398",
       "dataset": "GBaker/MedQA-USMLE-4-options",
-      "locked_at": "2026-06-09T23:19:51",
-      "rows": null,
+      "locked_at": "2026-06-10T18:50:44",
+      "rows": 1273,
       "upstream_sha": "0fb93dd23a7339b6dcd27e241cb9b5eca62d4d18"
     },
     "medxpertqa": {
-      "content_sha": null,
+      "content_sha": "183ff1886ea522bb2c46996bba326273710a64c55e87951261ba70c7c5e08dd6",
       "dataset": "TsinghuaC3I/MedXpertQA",
-      "locked_at": "2026-06-09T23:19:51",
-      "rows": null,
+      "locked_at": "2026-06-10T18:51:10",
+      "rows": 1000,
       "upstream_sha": "7e7c465a68eb2b866926bfa59c8c9d17a8daba65"
     },
     "mmlu_cs": {
       "content_sha": "a80b30c568fd922fc02e83f08dbeabbcd36329719cf0be3825478b222d969565",
       "dataset": "cais/mmlu",
-      "locked_at": "2026-06-09T23:41:29",
+      "locked_at": "2026-06-10T18:56:20",
       "rows": 312,
       "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
     },
     "mmlu_medical": {
-      "content_sha": null,
+      "content_sha": "c486196a9c32d04a9d2fa9dd031b17b48f9dc05c7f77e6ab01ecbb0b393cbccd",
       "dataset": "cais/mmlu",
-      "locked_at": "2026-06-09T23:19:53",
-      "rows": null,
+      "locked_at": "2026-06-10T18:51:55",
+      "rows": 1089,
       "upstream_sha": "c30699e8356da336a370243923dbaf21066bb9fe"
     },
     "mmlu_pro": {
-      "content_sha": null,
+      "content_sha": "016520c3eccc516c042c2c2baf8857166e13cd92e7329dd9feb3eb72da4cf676",
       "dataset": "TIGER-Lab/MMLU-Pro",
-      "locked_at": "2026-06-09T23:19:50",
-      "rows": null,
+      "locked_at": "2026-06-10T18:52:20",
+      "rows": 1000,
       "upstream_sha": "b189ec765aa7ed75c8acfea42df31fdae71f97be"
     },
     "openbookqa": {
-      "content_sha": null,
+      "content_sha": "8b4bf2a6efb0b76b4f050b921575613f6a4585f3889f936f39510a7c0600d67e",
       "dataset": "allenai/openbookqa",
-      "locked_at": "2026-06-09T23:19:52",
-      "rows": null,
+      "locked_at": "2026-06-10T18:53:53",
+      "rows": 500,
       "upstream_sha": "388097ea7776314e93a529163e0fea805b8a6454"
     },
     "pubmedqa": {
-      "content_sha": null,
+      "content_sha": "64c3df5dda80b44b2c80d668d42b22827352e4cb3cf2caa6e7fd7388ece8fb39",
       "dataset": "qiaojin/PubMedQA",
-      "locked_at": "2026-06-09T23:19:52",
-      "rows": null,
+      "locked_at": "2026-06-10T18:54:25",
+      "rows": 1000,
       "upstream_sha": "9001f2853fb87cab8d220904e0de81ac6973b318"
     },
     "supergpqa": {
-      "content_sha": null,
+      "content_sha": "03caace146d599ce3179df4a35f5cf7f430b7157e41180185e02d5dc56603169",
       "dataset": "m-a-p/SuperGPQA",
-      "locked_at": "2026-06-09T23:19:50",
-      "rows": null,
+      "locked_at": "2026-06-10T18:55:54",
+      "rows": 1500,
       "upstream_sha": "4430d4458112c7d4497fdcf94d7cc223313d6acf"
     },
     "truthfulqa": {
-      "content_sha": null,
+      "content_sha": "60153a3fa771c148876761e238f28c61c1ece2aef5257aaf5f445b82c532dcf2",
       "dataset": "truthfulqa/truthful_qa",
-      "locked_at": "2026-06-09T23:19:50",
-      "rows": null,
+      "locked_at": "2026-06-10T18:54:56",
+      "rows": 806,
       "upstream_sha": "741b8276f2d1982aa3d5b832d3ee81ed3b896490"
     },
     "winogrande": {
-      "content_sha": null,
+      "content_sha": "43f09ecc95dafc3044a2b0716f0ab6cebbee8d029e77f370ca010cd3bda01eb9",
       "dataset": "allenai/winogrande",
-      "locked_at": "2026-06-09T23:19:52",
-      "rows": null,
+      "locked_at": "2026-06-10T18:59:29",
+      "rows": 1000,
       "upstream_sha": "01e74176c63542e6b0bcb004dcdea22d94fb67b5"
     }
   }

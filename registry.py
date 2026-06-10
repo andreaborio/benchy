@@ -163,7 +163,7 @@ def load_benchmarks(bench_dir, hooks):
         if not fn.endswith(".json"):
             continue
         key = fn[:-5]
-        spec = json.load(open(os.path.join(bench_dir, fn)))
+        spec = json.load(open(os.path.join(bench_dir, fn), encoding="utf-8"))
         for req in ("name", "domain", "tier", "source"):
             if req not in spec:
                 raise ValueError(f"benchmarks/{fn}: missing '{req}'")

@@ -12,6 +12,9 @@ Usage:
   python3 fetch_benchmarks.py all          # fetch everything (large)
   python3 fetch_benchmarks.py mmlu_pro arc_challenge medmcqa   # fetch specific sets
 
+CLI fetches go through the api.py lockfile contract (pin upstream revision + content-hash
+into benchmarks.lock.json, verify against an existing lock) — identical to `api.py lock`.
+
 Note: true code-execution benchmarks (HumanEval, MBPP, LiveCodeBench, SWE-bench) are NOT
 here — they need a code runner (generate → execute tests), which this MCQ/rubric harness
 does not do. The "coding" coverage below is code/CS *knowledge & reasoning* in MCQ form.
@@ -26,13 +29,22 @@ DATA = os.path.join(HERE, "data")
 BENCH_DIR = os.path.join(HERE, "benchmarks")
 LETTERS = "ABCDEFGHIJ"
 
+class FetchError(Exception):
+    """A rows request failed, or fewer rows came back than the server reported: the fetch is
+    ABORTED instead of writing a silently partial file that would then be hash-locked as a
+    'snapshot' by api.py."""
+
+
 def api_rows(dataset, config, split, cap, revision=None):
     """Page rows out of the datasets-server API (100 at a time) up to `cap`.
 
     `revision` (a dataset commit sha or branch) is passed through for best-effort
     pinning; the datasets-server accepts it without erroring on unknown values, so
-    integrity is additionally enforced by content hashing in api.py."""
-    out, off = [], 0
+    integrity is additionally enforced by content hashing in api.py.
+
+    Partial fetches are FATAL: any page error raises FetchError, and the final row count
+    is checked against the response's num_rows_total — a short read raises too."""
+    out, off, total = [], 0, None
     while off < cap:
         q = {"dataset": dataset, "config": config, "split": split, "offset": off, "length": 100}
         if revision: q["revision"] = revision
@@ -41,13 +53,17 @@ def api_rows(dataset, config, split, cap, revision=None):
             with urllib.request.urlopen(url, timeout=40) as r:
                 d = json.load(r)
         except Exception as e:
-            print("  ! fetch error", dataset, config, split, off, e); break
+            raise FetchError(f"{dataset}/{config}/{split} @ offset {off}: {e}")
         rs = d.get("rows", [])
+        total = d.get("num_rows_total", total)
         if not rs: break
         out += [x["row"] for x in rs]
         off += 100
         if off >= d.get("num_rows_total", 0): break
         time.sleep(0.12)
+    if total is not None and len(out) < min(cap, total):
+        raise FetchError(f"{dataset}/{config}/{split}: got {len(out)} rows but the server "
+                         f"reports {total} (cap {cap}) — partial fetch, aborting without writing")
     return out[:cap]
 
 # ---- hooks: normalizers for the few sets the declarative `map` can't express — a code
@@ -109,7 +125,9 @@ def fetch(key, revision=None):
         return 0
     os.makedirs(DATA, exist_ok=True)
     tmp = os.path.join(DATA, key + ".jsonl.tmp")
-    with open(tmp, "w") as f:
+    # encoding + newline are pinned: these bytes are content-hashed into benchmarks.lock.json
+    # (api.content_sha), so CRLF translation or a locale encoding would change the hash.
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         for r in recs: f.write(json.dumps(r) + "\n")
     os.replace(tmp, os.path.join(DATA, key + ".jsonl"))   # atomic: no half-written file
     print(f"  {key} ({spec['name']}): {len(recs)} questions -> data/{key}.jsonl")
@@ -155,16 +173,22 @@ def list_registry():
 
 def main():
     args = sys.argv[1:]
-    if not args or args == ["list"]:
+    if not args or args in (["list"], ["--help"], ["-h"], ["help"]):
         list_registry(); return
     keys = list(REGISTRY) if args == ["all"] else current_keys() if args == ["current"] else args
     unknown = [k for k in keys if k not in REGISTRY]
     if unknown:
         print("unknown benchmark(s):", ", ".join(unknown), "\n"); list_registry(); sys.exit(2)
-    for k in keys:
-        try: fetch(k)
-        except Exception as e: print(f"  ! {k} failed: {e}")
-    print("done.")
+    # The CLI goes through the lockfile contract — a manual `fetch_benchmarks.py <key>` must
+    # not bypass pinning: api.fetch() pins the upstream revision, content-hashes the rows
+    # into benchmarks.lock.json and verifies against an existing lock, exactly like
+    # `api.py lock`. (Imported lazily: api imports this module, so importing it at the top
+    # would be circular for library users.) The fetch()/api_rows() functions above stay
+    # plain fetchers for api.py's own use.
+    import api
+    print("fetch_benchmarks: fetching via the lockfile contract (same as `api.py lock`) — "
+          "pinned revision + content hash recorded in benchmarks.lock.json.")
+    api._cmd_lock(keys)     # prints per-key results; exits non-zero if any key failed
 
 if __name__ == "__main__":
     main()
