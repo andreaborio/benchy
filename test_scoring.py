@@ -268,6 +268,69 @@ class TestSummaryValidity(unittest.TestCase):
         self.assertEqual(macro["nothink_k"], 2)
 
 
+class TestMacroTagCoverage(unittest.TestCase):
+    """Macro-average tag selection: a tag's coverage counts only DISTINCT benchmarks where
+    it has at least one VALID run — breadth built out of invalid (>5% failed requests) runs
+    must not win the macro slot. When NO tag has any valid run, the macro still degrades to
+    the invalid runs (which stay flagged, as today) instead of emptying the panel."""
+
+    def _macro(self, *recs):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_runs(tmp, *recs)
+            return Stats(tmp).summary()
+
+    @staticmethod
+    def _run(bench, tag, acc, **over):
+        rec = {"ts": "t", "benchmark": bench, "mode": bc.MODE_NOTHINK, "tag": tag,
+               "n": 50, "correct": int(round(acc / 2)), "accuracy": acc}
+        rec.update(over)
+        return rec
+
+    def test_valid_coverage_beats_invalid_breadth(self):
+        # tag B comes first in runs.jsonl with 4 runs on 4 benchmarks (the old run-count
+        # heuristic scored it coverage 4 and picked it), but 2 of them are INVALID ->
+        # real coverage 2. Tag A has 3 valid runs -> coverage 3 and must win the slot.
+        s = self._macro(
+            self._run("b1", "B", 80.0),
+            self._run("b2", "B", 80.0),
+            self._run("b3", "B", 90.0, invalid=True, errors=9),
+            self._run("b4", "B", 90.0, invalid=True, errors=9),
+            self._run("b1", "A", 60.0),
+            self._run("b2", "A", 70.0),
+            self._run("b3", "A", 80.0))
+        macro = s["macro"]
+        self.assertEqual(macro["nothink_tag"], "A")
+        self.assertEqual(macro["nothink_k"], 3)
+        self.assertEqual(macro["nothink_mean"], 70.0)   # mean(60, 70, 80) — no B run blended in
+
+    def test_repeat_runs_on_same_benchmark_do_not_inflate_coverage(self):
+        # coverage counts distinct benchmarks, not runs: 4 valid runs over 2 benchmarks
+        # is coverage 2 and loses to 3 single-run benchmarks (old code: 4 > 3 -> R won)
+        s = self._macro(
+            self._run("b1", "R", 80.0), self._run("b1", "R", 82.0),
+            self._run("b2", "R", 80.0), self._run("b2", "R", 84.0),
+            self._run("b1", "W", 50.0), self._run("b2", "W", 60.0),
+            self._run("b3", "W", 70.0))
+        macro = s["macro"]
+        self.assertEqual(macro["nothink_tag"], "W")
+        self.assertEqual((macro["nothink_k"], macro["nothink_mean"]), (3, 60.0))
+
+    def test_all_invalid_still_returns_macro_flagged(self):
+        # NO tag has a valid nothink run: the panel degrades gracefully — the legacy
+        # run-count heuristic picks a tag among the invalid runs and a macro IS returned,
+        # while every surfaced row keeps its "invalid" flag exactly as today
+        s = self._macro(
+            self._run("b1", "X", 40.0, invalid=True, errors=5),
+            self._run("b2", "X", 60.0, invalid=True, errors=5),
+            self._run("b1", "Y", 50.0, invalid=True, errors=4))
+        macro = s["macro"]
+        self.assertEqual(macro["nothink_tag"], "X")     # 2 runs beat Y's 1 (legacy fallback)
+        self.assertEqual(macro["nothink_k"], 2)
+        self.assertEqual(macro["nothink_mean"], 50.0)   # mean(40, 60) — degraded, not empty
+        self.assertTrue(all(r["invalid"] for r in s["per_run"]))      # nothing laundered
+        self.assertTrue(s["by_benchmark"]["b1"]["best"]["invalid"])   # UI can still mark it
+
+
 class TestPairedCompare(unittest.TestCase):
     """End-to-end McNemar verdicts over a synthetic runs.jsonl + details tree."""
 

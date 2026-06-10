@@ -28,7 +28,7 @@ URLS = {"hard": "https://huggingface.co/datasets/openai/healthbench/resolve/main
 # A mismatch (or a missing pin) refuses to run unless BENCHY_ALLOW_UNPINNED=1.
 EXPECTED_SHA256 = {
     "hard": "b0320430e5cd974e746585594c1dd10b5a3fc2aff9c72b26106c2c4a069d74e9",
-    "consensus": None,  # no pinned local snapshot yet — requires BENCHY_ALLOW_UNPINNED=1
+    "consensus": "fabe37553327238928b05357d8b309737b5d426d6dee432a3376da618d0969d6",
 }
 # default grader per provider; OpenAI gpt-4.1 = the official HealthBench judge
 GRADER = {"openai": "gpt-4.1", "anthropic": "claude-sonnet-4-6", "google": "gemini-2.5-pro"}

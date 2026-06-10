@@ -273,15 +273,31 @@ class Stats:
             by[b] = cell
         # macro-avg: exclude rubric benchmarks (not % accuracy) and use ONE consistent tag per
         # mode (the widest-coverage tag) so different builds/configs are never blended.
+        # A tag's coverage counts DISTINCT benchmarks where it has at least one VALID run —
+        # breadth built out of invalid (>5% failed requests) runs must not win the macro
+        # slot over a narrower tag whose runs are actually scoreable. Ties break as before:
+        # most_common is stable, so the tag seen first in runs.jsonl order wins.
         def macro_for(mode):
-            cov = collections.Counter(x["tag"] for x in per_run
-                                      if x["mode"] == mode and not is_rubric(x["benchmark"]))
-            if not cov: return None, 0, None
+            rows = [x for x in per_run if x["mode"] == mode and not is_rubric(x["benchmark"])]
+            if not rows: return None, 0, None
+            cov, counted = collections.Counter(), set()
+            for x in rows:
+                if x.get("invalid"): continue
+                key = (x["tag"], x["benchmark"])
+                if key not in counted:
+                    counted.add(key)
+                    cov[x["tag"]] += 1
+            if not cov:
+                # NO tag has a single valid run in this mode: degrade to the legacy
+                # run-count heuristic over the invalid runs so the macro panel still
+                # shows something (every surfaced row keeps its "invalid" flag) rather
+                # than going empty
+                cov = collections.Counter(x["tag"] for x in rows)
             tag = cov.most_common(1)[0][0]
             accs = []
             for b in benches:
                 if is_rubric(b): continue
-                cands = [x for x in per_run if x["benchmark"] == b and x["mode"] == mode and x["tag"] == tag]
+                cands = [x for x in rows if x["benchmark"] == b and x["tag"] == tag]
                 if cands:
                     # same validity preference as best(): never blend an invalid run into the
                     # macro average while a valid one exists for this benchmark/mode/tag
