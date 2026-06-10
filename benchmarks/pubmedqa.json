@@ -12,5 +12,6 @@
       "split": "train"
     }
   ],
-  "hook": "pubmedqa"
+  "hook": "pubmedqa",
+  "fit": "mcq"
 }

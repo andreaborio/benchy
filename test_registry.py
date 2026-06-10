@@ -150,6 +150,15 @@ class TestLoader(unittest.TestCase):
         for k in ("humaneval", "mbpp", "pubmedqa"):
             self.assertIs(fb.REGISTRY[k]["norm"], fb.HOOKS[k])
 
+    def test_fit_per_benchmark(self):
+        # Pins every entry's eval dispatch. A custom "hook" defaults fit to "code"
+        # (registry.py), which silently mislabelled pubmedqa — an MCQ set with an
+        # oddball normalizer — sending it to eval_code from the dashboard and
+        # failing the healthcheck shape probe. Declare fit explicitly for hooks.
+        for k, s in fb.REGISTRY.items():
+            want = "code" if k in ("humaneval", "mbpp") else "mcq"
+            self.assertEqual(s["fit"], want, k)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
