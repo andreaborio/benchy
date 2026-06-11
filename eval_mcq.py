@@ -41,6 +41,11 @@ SHUFFLE = os.environ.get("BENCHY_SHUFFLE_OPTIONS", "1").lower() not in ("0", "fa
 # tail-scrape assumes exactly one request in flight. Scoring is unaffected: the per-question
 # option permutation is seeded by the question text alone (see prepare), never by request
 # order, so every concurrency level presents identical questions.
+# Opt-in live token streaming (BENCHY_LIVE_STREAM=1): the current question's reasoning +
+# answer stream into results/gen.json for the dashboard's generation box. Off by default so
+# the scoring path stays the plain blocking chat(); only honored at CONCURRENCY==1 (with N
+# workers there is no single "current" generation to show). Display only — never feeds scoring.
+LIVE_STREAM = os.environ.get("BENCHY_LIVE_STREAM", "").lower() in ("1", "true", "yes", "on")
 try:
     CONCURRENCY = max(1, int(os.environ.get("BENCHY_CONCURRENCY", "1")))
 except ValueError:
@@ -111,6 +116,14 @@ def ask(prompt, think):
     return bc.chat(prompt, think=think, max_tokens=3072 if think else 24,
                    get_model=get_model, seed=SEED, server_base=SERVER_BASE, timeout=600)
 
+def ask_streaming(prompt, think, w, qnum, n, question):
+    """Streaming ask for the live generation box (CONCURRENCY==1 only): bc.stream_into feeds the
+    reasoning/answer deltas into gen.json as they arrive, and returns the SAME assembled text
+    ask() would, so scoring is unchanged. qnum is the 1-based question-in-flight number."""
+    return bc.stream_into(w, qnum, n, question, messages=prompt, think=think,
+                          max_tokens=3072 if think else 24, get_model=get_model,
+                          seed=SEED, server_base=SERVER_BASE, timeout=600)
+
 def extract(text, keys):
     """Find the chosen option letter. Anchored and CASE-SENSITIVE for the option letters: the
     text is never upper-cased, so prose words like 'a' / 'I' are not misread as answers (the
@@ -164,30 +177,35 @@ def server_timing():
     except Exception:
         return {}
 
-def run_one(i, r, think):
+def run_one(i, r, think, w=None, n=0):
     """prepare/ask/extract for one question — the unit of work a worker thread runs (bc.chat
     does its own retries; everything else here is pure). Returns a result dict; a request
     that still failed after retries comes back with an "error" key instead of raising, so
-    the main thread counts every question exactly once."""
+    the main thread counts every question exactly once. When `w` is given and live streaming
+    is on, the generation streams into gen.json (only used at CONCURRENCY==1)."""
     question, opts, keys, gold, perm = prepare(r)
     prompt = build_prompt(question, opts, keys)
     q0 = time.time()
     try:
-        out = ask(prompt, think)
+        if LIVE_STREAM and w is not None:
+            out = ask_streaming(prompt, think, w, i + 1, n, question)
+        else:
+            out = ask(prompt, think)
     except Exception as e:
         return {"i": i, "q": question, "opts": opts, "gold": gold, "perm": perm,
                 "t": time.time() - q0, "error": e}
     return {"i": i, "q": question, "opts": opts, "gold": gold, "perm": perm,
             "t": time.time() - q0, "out": out, "pred": extract(out, keys)}
 
-def iter_results(rows, think):
+def iter_results(rows, think, w=None):
     """Yield one run_one() result per question. CONCURRENCY=1 (default): dataset order, one
-    request in flight at a time — the historical sequential behavior. CONCURRENCY>1: results
-    arrive in COMPLETION order from a thread pool; the caller does all file writes, so they
-    stay serialized on the main thread (A/B pairing is by question text, not row order)."""
+    request in flight at a time — the historical sequential behavior, and the only mode that
+    streams the live generation box (`w` passed through). CONCURRENCY>1: results arrive in
+    COMPLETION order from a thread pool; the caller does all file writes, so they stay
+    serialized on the main thread (A/B pairing is by question text, not row order)."""
     if CONCURRENCY == 1:
         for i, r in enumerate(rows):
-            yield run_one(i, r, think)
+            yield run_one(i, r, think, w, len(rows))
         return
     # NOT a `with` block: an early exit in the consumer (Ctrl-C / exception / generator
     # close raising GeneratorExit at the yield) must CANCEL the queued questions, not run
@@ -222,7 +240,13 @@ def main():
         "timing_note": "server_timing skipped at concurrency>1; timings are wall-clock"}
     correct = 0; scored = 0; errors = 0; done = 0; think_count = 0; dist = {}; unparsed = 0; t0 = time.time()
     opts_hist = {}   # {str(option_count): scored rows presenting that many options} — mixed-option χ² expectation
-    for res in iter_results(rows, think):
+    # initial live.json so the dashboard shows the run immediately (question 1 in flight)
+    # instead of only after Q1 completes; i = completed count, the UI shows i+1 while running
+    w.live(dict({"running": True, "i": 0, "n": len(rows), "correct": 0,
+                 "accuracy": 0.0, "errors": 0, "elapsed_s": 0}, **live_extra))
+    if LIVE_STREAM and CONCURRENCY > 1:   # no single "current" generation to show at N>1
+        w.gen({"running": False, "disabled": True, "reason": "live streaming is shown at concurrency=1"})
+    for res in iter_results(rows, think, w):
         done += 1
         i, question, opts, gold, perm = res["i"], res["q"], res["opts"], res["gold"], res["perm"]
         if "error" in res:
@@ -296,6 +320,7 @@ def main():
     w.finish(fields, get_model(), SERVER_BASE, path)
     w.live(dict({"running": False, "i": len(rows), "n": len(rows), "correct": correct,
                  "accuracy": round(acc, 1), "errors": errors, "elapsed_s": round(dt)}, **live_extra))
+    w.gen_finish()   # freeze the generation box on the last answer (running:false)
     print(f"\n=== {bench} [{mode}] tag={tag} N={scored} "
           f"accuracy = {correct}/{scored} = {acc:.1f}%  ({dt:.0f}s, {dt/max(1,len(rows)):.1f}s/q, {errors} errors) ===")
 

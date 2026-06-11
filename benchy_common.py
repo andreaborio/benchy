@@ -70,6 +70,150 @@ def chat(messages, think=False, max_tokens=256, model=None, get_model=None,
     raise ChatError("chat request failed after retries: %s" % err)
 
 
+def _split_think(feed):
+    """Build an incremental <think>…</think> splitter. Returns a function feed(chunk) that
+    routes content to on-the-fly ('reasoning', text) / ('answer', text) callbacks via `feed`,
+    holding back a partial trailing tag so a tag split across two stream chunks is never
+    mislabelled. Call the returned splitter with chunks, then close() to flush the tail."""
+    state = {"in": False, "buf": ""}
+    OPEN, CLOSE = "<think>", "</think>"
+    def push(chunk):
+        state["buf"] += chunk
+        while state["buf"]:
+            if not state["in"]:
+                i = state["buf"].find(OPEN)
+                if i == -1:
+                    keep = len(OPEN) - 1                      # could be a partial "<think" tail
+                    if len(state["buf"]) > keep:
+                        feed("answer", state["buf"][:-keep] if keep else state["buf"])
+                        state["buf"] = state["buf"][-keep:] if keep else ""
+                    break
+                if i: feed("answer", state["buf"][:i])
+                state["buf"] = state["buf"][i + len(OPEN):]; state["in"] = True
+            else:
+                i = state["buf"].find(CLOSE)
+                if i == -1:
+                    keep = len(CLOSE) - 1
+                    if len(state["buf"]) > keep:
+                        feed("reasoning", state["buf"][:-keep] if keep else state["buf"])
+                        state["buf"] = state["buf"][-keep:] if keep else ""
+                    break
+                if i: feed("reasoning", state["buf"][:i])
+                state["buf"] = state["buf"][i + len(CLOSE):]; state["in"] = False
+    def close():
+        if state["buf"]:
+            feed("reasoning" if state["in"] else "answer", state["buf"]); state["buf"] = ""
+    push.close = close
+    return push
+
+
+def chat_stream(messages, think=False, max_tokens=256, model=None, get_model=None,
+                seed=None, server_base=None, timeout=600, on_delta=None):
+    """Streaming sibling of chat() for the live 'generation' box. POSTs with stream:true,
+    parses the SSE token deltas, and calls on_delta(kind, text) as content arrives — kind is
+    'reasoning' (a provider reasoning/reasoning_content delta, or text inside an inline
+    <think>…</think> span) or 'answer' (everything else). It accumulates and returns the SAME
+    full assistant text chat() would return (message.content; provider reasoning_content is a
+    separate field, surfaced to on_delta but NOT folded into the returned text), so the scorer
+    downstream is unchanged. A mid-stream transport failure restarts the stream from scratch
+    within the same 2s/8s retry budget (on_delta('reset','') clears the box); a server that
+    doesn't actually stream (non event-stream response) falls back to one blocking read, routed
+    through the same splitter so the box still shows reasoning/answer (all at once). on_delta
+    is display-only and best-effort — exceptions from it never abort the run."""
+    if isinstance(messages, str):
+        messages = [{"role": "user", "content": messages}]
+    base = (server_base or settings()["server_base"]).rstrip("/")
+    body = {"model": model if model is not None else (get_model() if get_model else "default"),
+            "messages": messages, "max_tokens": max_tokens, "temperature": 0.0,
+            "think": bool(think), "stream": True}
+    if seed is not None:
+        body["seed"] = seed
+    req = urllib.request.Request(base + "/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+
+    def emit(kind, text):
+        if text and on_delta:
+            try: on_delta(kind, text)
+            except Exception: pass
+
+    err = None
+    for delay in (2, 8, None):
+        full = []                                            # message.content pieces (the return value)
+        split = _split_think(emit)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if "text/event-stream" not in (resp.headers.get("Content-Type") or ""):
+                    # server ignored stream:true — one blocking read, routed through the splitter
+                    content = json.loads(resp.read())["choices"][0]["message"]["content"] or ""
+                    split(content); split.close()
+                    return content
+                done = False
+                for raw in resp:                             # SSE: one JSON object per "data:" line
+                    line = raw.decode("utf-8", "ignore").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        done = True; break
+                    try:
+                        choice = json.loads(data)["choices"][0]
+                    except Exception:
+                        continue
+                    if choice.get("finish_reason"):
+                        done = True                          # last content chunk — stream is complete
+                    delta = choice.get("delta", {})
+                    rc = delta.get("reasoning_content") or delta.get("reasoning")
+                    if rc:
+                        emit("reasoning", rc)                # separate field — not part of content
+                    piece = delta.get("content")
+                    if piece:
+                        full.append(piece); split(piece)     # inline <think> handled by the splitter
+                if not done:
+                    # the stream ended without [DONE] or a finish_reason — treat it as truncated
+                    # and retry, since this text feeds scoring (BENCHY_LIVE_STREAM expects a
+                    # spec-compliant streaming server: ds4 / vLLM / llama.cpp all send one)
+                    raise ConnectionError("stream ended without a terminal marker")
+                split.close()
+                return "".join(full)
+        except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as e:
+            err = e
+            if on_delta:                                     # tell the box to drop the partial buffer
+                try: on_delta("reset", "")                   # (empty text — bypass emit's text guard)
+                except Exception: pass
+            if delay is not None:
+                time.sleep(delay)
+    raise ChatError("chat stream failed after retries: %s" % err)
+
+
+def stream_into(writer, qnum, n, question, **chat_kw):
+    """Run chat_stream(**chat_kw) and funnel its reasoning/answer deltas into writer.gen()
+    (throttled to ~10 Hz) so the dashboard's live generation box fills token-by-token, then a
+    final flush with the complete answer. Returns the SAME assembled text chat() would (so the
+    scorer is unchanged). qnum is the 1-based question-in-flight number; shared by the runners
+    so the streaming glue lives in one place."""
+    buf = {"reasoning": "", "answer": ""}
+    st = {"last": 0.0}
+    def flush(force=False):
+        now = time.time()
+        if not force and now - st["last"] < 0.1:   # throttle: at most ~10 writes/sec
+            return
+        st["last"] = now
+        writer.gen({"running": True, "i": qnum, "n": n,
+                    "phase": "answering" if buf["answer"] else "reasoning",
+                    "q": (question or "")[:200],
+                    "reasoning": buf["reasoning"][-8000:], "answer": buf["answer"][-8000:],
+                    "gen_tokens": len((buf["reasoning"] + " " + buf["answer"]).split())})
+    def on_delta(kind, text):
+        if kind == "reset":                         # a retry restarted the stream — drop partials
+            buf["reasoning"] = ""; buf["answer"] = ""; flush(force=True); return
+        if kind in buf:
+            buf[kind] += text
+        flush()
+    out = chat_stream(on_delta=on_delta, **chat_kw)
+    flush(force=True)                               # final state: the complete answer
+    return out
+
+
 def parse_run_args(argv=None, prog=None, bench_help="benchmark JSONL path"):
     """The ONE runner CLI, shared by eval_mcq / eval_code / healthbench:
         positional BENCH N MODE TAG, optional --seed INT (default 1234).
@@ -105,13 +249,34 @@ class RunWriter:
         self.run_id = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
         self.details_path = os.path.join(self.details_dir,
                                          "%s__%s__%s.jsonl" % (bench, mode, self.run_id))
+        self.gen_path = os.path.join(self.results, "gen.json")  # live token-stream buffer (display only)
+        self._last_gen = None
         open(self.stream_path, "w", encoding="utf-8").close()   # clear the live feed
         open(self.details_path, "w", encoding="utf-8").close()
+        write_live(self.gen_path, {"running": False})           # reset the generation box for this run
 
     def stream(self, ev):
         """Append one per-question event to the live stream.jsonl feed."""
         with open(self.stream_path, "a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(ev) + "\n")
+
+    def gen(self, obj):
+        """Atomic gen.json update: the live token-streaming buffer for the question currently
+        being generated (the dashboard's reasoning+answer box). Display only — gen.json never
+        feeds scoring, so a torn/partial buffer can only affect what the box shows, never a
+        number. tag/benchmark/mode/ts are filled in; the last write is remembered for gen_finish."""
+        out = {"tag": self.tag, "benchmark": self.bench, "mode": self.mode}
+        out.update(obj)
+        out["ts"] = datetime.datetime.now().isoformat(timespec="seconds")
+        self._last_gen = out
+        write_live(self.gen_path, out)
+
+    def gen_finish(self):
+        """At run end, freeze the box on the last question's content with running:false (so the
+        final answer stays visible) — or a bare idle state if nothing was ever streamed."""
+        out = dict(self._last_gen or {"running": False})
+        out["running"] = False
+        write_live(self.gen_path, out)
 
     def detail(self, row):
         """Append one per-question row to this run's details file."""

@@ -602,7 +602,22 @@ def pulse_payload(since=0.0):
     now = rows[-1].get("t", 0) if rows else 0
     stream = read_stream()   # embeds live.json under "live" — reuse it instead of re-reading
     return {"live": stream["live"], "stream": stream, "server": snap["server"],
-            "sys": snap["sys"], "activity": snap["activity"], "hist": hist, "now": now}
+            "sys": snap["sys"], "activity": snap["activity"], "hist": hist, "now": now,
+            "gen": read_gen()}
+
+def read_gen():
+    """results/gen.json — the live token-stream buffer for the generation box (reasoning +
+    answer of the question being generated). None when the file is absent or unreadable;
+    {"running": false} between runs; {"disabled": true, ...} at concurrency>1. Written only
+    when an eval runs with BENCHY_LIVE_STREAM=1; an empty/missing file just means no box."""
+    fp = os.path.join(RESULTS, "gen.json")
+    if not os.path.exists(fp):
+        return None
+    try:
+        with open(fp, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 def read_log_tail(which, n=300):
     """Tail of a results log file (server|eval) — for the in-UI debug drawer."""

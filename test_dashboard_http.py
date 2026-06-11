@@ -242,7 +242,7 @@ class TestPulse(DashboardCase):
     """/api/pulse — the consolidated poll: one payload per tick, since-cursor history increments,
     and the sys/activity/server routes all serving the sampler's cached snapshot."""
 
-    KEYS = ("live", "stream", "server", "sys", "activity", "hist", "now")
+    KEYS = ("live", "stream", "server", "sys", "activity", "hist", "now", "gen")
 
     @classmethod
     def populate(cls):
@@ -284,6 +284,25 @@ class TestPulse(DashboardCase):
         self.assertEqual(caught["now"], 5.0)
         _, bad = self.get_json("/api/pulse?since=bogus")     # malformed cursor degrades to 0
         self.assertEqual(len(bad["hist"]), 5)
+
+    def test_gen_payload(self):
+        # gen.json is absent on a fresh tree -> pulse carries gen: null (no generation box)
+        gp = os.path.join(self.results, "gen.json")
+        if os.path.exists(gp): os.remove(gp)
+        _, d = self.get_json("/api/pulse")
+        self.assertIsNone(d["gen"])
+        # once a streaming eval writes gen.json, pulse surfaces it verbatim for the box
+        buf = {"running": True, "i": 3, "n": 10, "phase": "answering",
+               "reasoning": "let me think", "answer": "B", "gen_tokens": 4}
+        with open(gp, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(buf, f)
+        try:
+            _, d2 = self.get_json("/api/pulse")
+            self.assertEqual(d2["gen"]["phase"], "answering")
+            self.assertEqual(d2["gen"]["answer"], "B")
+            self.assertEqual(d2["gen"]["i"], 3)
+        finally:
+            os.remove(gp)
 
     def test_polled_routes_serve_the_cached_snapshot(self):
         # /api/sys, /api/activity and /api/server/status answer from the same cached sampler

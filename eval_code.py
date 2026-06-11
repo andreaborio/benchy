@@ -31,6 +31,10 @@ SEED = 1234
 # + tempdir + timeout only). Require BENCHY_ALLOW_CODE_EXEC so it can never run by surprise
 # (e.g. via a cross-site request to the dashboard's /api/run).
 ALLOW = os.environ.get("BENCHY_ALLOW_CODE_EXEC", "").lower() in ("1", "true", "yes", "on")
+# Opt-in live token streaming (BENCHY_LIVE_STREAM=1): the current task's generated code (and
+# any reasoning) streams into results/gen.json for the dashboard's generation box. Off by
+# default → plain blocking chat(). eval_code is sequential, so there is no concurrency caveat.
+LIVE_STREAM = os.environ.get("BENCHY_LIVE_STREAM", "").lower() in ("1", "true", "yes", "on")
 
 _MODEL = None
 def get_model():
@@ -193,10 +197,21 @@ def main():
     w = bc.RunWriter(bench, mode, tag, bc.KIND_CODE)
     print(f"⚠ executing model-generated code in subprocesses (timeout {TIMEOUT}s each). bench={bench} N={len(rows)} model={get_model()}", flush=True)
     passed = 0; scored = 0; errors = 0; t0 = time.time()
+    # initial live.json so the dashboard shows the run immediately (task 1 in flight); i =
+    # completed count, the UI shows i+1 while running
+    w.live({"running": True, "i": 0, "n": len(rows), "correct": 0,
+            "accuracy": 0.0, "errors": 0, "elapsed_s": 0})
     for i, task in enumerate(rows):
         q0 = time.time()
         try:
-            out = ask(build_prompt(task), think)
+            prompt = build_prompt(task)
+            if LIVE_STREAM:
+                out = bc.stream_into(w, i + 1, len(rows), str(task.get("prompt", "")),
+                                     messages=prompt, think=think,
+                                     max_tokens=4096 if think else 1536, get_model=get_model,
+                                     seed=SEED, server_base=SERVER_BASE, timeout=600)
+            else:
+                out = ask(prompt, think)
         except Exception as e:
             # request still failed after bc.chat's retries: excluded from the pass@1
             # numerator AND denominator, counted in the run record's "errors" field
@@ -242,6 +257,7 @@ def main():
     w.finish(fields, get_model(), SERVER_BASE, path)
     w.live({"running": False, "i": len(rows), "n": len(rows), "correct": passed,
             "accuracy": round(acc, 1), "errors": errors, "elapsed_s": round(dt)})
+    w.gen_finish()   # freeze the generation box on the last answer (running:false)
     print(f"\n=== {bench} [{mode}] tag={tag} N={scored} pass@1 = {passed}/{scored} = {acc:.1f}%  ({dt:.0f}s, {errors} errors) ===")
 
 if __name__ == "__main__":

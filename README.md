@@ -135,6 +135,19 @@ browser. **Config:** set `BENCHY_SERVER` (default `http://127.0.0.1:8000`) and
 `BENCHY_RESULTS=<dir>` points the dashboard at another checkout's `results/` — useful to
 watch a run launched from a different benchy copy without restarting it.
 
+**Live generation box** — run an eval with `BENCHY_LIVE_STREAM=1` and the dashboard's *Live
+run* section shows a **reasoning + answer box** that fills token-by-token as the model decodes
+the current question (alongside the decode-t/s chart). It works against any server that
+supports streaming (`stream:true`) — unlike the t/s chart, which needs a ds4-style log — so it
+also fills the live view on vLLM / llama.cpp. The runner streams the OpenAI SSE deltas, splits
+chain-of-thought (a `reasoning_content` field or an inline `<think>…</think>` span) from the
+answer, and assembles the *same* text the blocking call would, so **scoring is unchanged** — the
+box is display-only and the default scoring path stays the plain blocking request (the flag is
+opt-in because a few servers differ subtly between streamed and non-streamed output). It is
+honored only at `BENCHY_CONCURRENCY=1` (the default); with `N>1` there is no single "current"
+generation to show, so the box reports that the live stream is shown at concurrency 1 while the
+t/s chart and per-question feed keep working.
+
 ## Reproducible snapshots — `api.py` + the lockfile
 
 Other tools build on benchy as their benchmark source (e.g.

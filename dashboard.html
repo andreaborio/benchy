@@ -120,6 +120,13 @@ pre.ans{margin:8px 0 0;background:#060607;border:1px solid var(--bd);border-radi
 #errbar{display:none;position:fixed;top:0;left:0;right:0;z-index:200;background:#2a0d0f;border-bottom:1px solid rgba(255,77,79,.5);color:#ff9b9d;font-size:12.5px;font-weight:500;padding:7px 16px;text-align:center}
 .toast{background:#16161a;border:1px solid var(--bd2);color:var(--ink);padding:9px 15px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;transform:translateY(10px);transition:.28s}
 .toast.in{opacity:1;transform:none}.toast.bad{border-color:rgba(255,77,79,.5);color:#ff9b9d}
+/* live generation box (reasoning + answer streaming token-by-token) */
+.genlabel{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:10px 0 4px;display:flex;align-items:center;gap:7px}
+.genlabel.rea{color:var(--pur2)}
+.genbox pre{margin:0;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.genbox pre.genrea{background:#070710;border:1px solid rgba(168,85,247,.22);color:#b9a8d6}
+.genbox pre.genans{background:#060607;border:1px solid var(--bd);color:#d6d6dd}
+.genbox pre .cursor{display:inline-block;width:7px;height:13px;background:var(--teal);vertical-align:text-bottom;animation:pp 1.1s infinite;margin-left:1px}
 /* modal */
 #detModal,#setupModal,#benchModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(4px);z-index:100;padding:40px 20px;overflow:auto}
 #detModal .box,#setupModal .box,#benchModal .box{max-width:960px;margin:0 auto;background:#0d0d0f;border:1px solid #262629;border-radius:16px;padding:20px 22px}
@@ -287,6 +294,13 @@ pre.ans{margin:8px 0 0;background:#060607;border:1px solid var(--bd);border-radi
     <div class="eq" id="actBars"></div>
     <div class="eqcap"><span>decode throughput · per-chunk (this answer)</span><span id="eqcapR"></span></div>
   </div></div>
+  <div class="glowcard genbox" id="genBox" style="margin-top:14px;display:none"><div class="card">
+    <div class="ch"><h3>Live generation <span class="muted" id="genQ" style="text-transform:none;letter-spacing:0;font-weight:500"></span></h3>
+      <div style="display:flex;gap:10px;align-items:center"><span class="mono muted" id="genTok" style="font-size:11.5px"></span><button class="iconbtn xs" onclick="copyGen()" title="copy reasoning + answer">⧉ copy</button></div></div>
+    <div id="genNote" class="muted" style="font-size:12px;display:none"></div>
+    <div id="genReasonWrap" style="display:none"><div class="genlabel rea">reasoning</div><pre class="genrea" id="genReason" aria-live="off"></pre></div>
+    <div class="genlabel" id="genAnsLabel">answer</div><pre class="genans" id="genAns" aria-live="off"></pre>
+  </div></div>
   <div class="livegrid" style="margin-top:14px">
     <div class="livestack">
       <div class="card"><div class="ch"><h3>Running accuracy</h3><span class="accbig" id="accBig" style="color:var(--ok)">—</span></div>
@@ -402,7 +416,7 @@ const CSRF="__BENCHY_CSRF__";
    read this token (same-origin policy hides our HTML), so its forged POSTs are rejected. */
 (function(){const _f=window.fetch;window.fetch=function(u,o){o=o||{};const m=(o.method||'GET').toUpperCase();
   if(m!=='GET'&&m!=='HEAD'){o.headers=Object.assign({'X-Benchy-CSRF':CSRF},o.headers||{});}return _f.call(this,u,o);};})();
-let RUNS=[],PERF=[],META={},SUMMARY={},LIVE={},STREAM={},SYS={},ACT={},HISTM=[];
+let RUNS=[],PERF=[],META={},SUMMARY={},LIVE={},STREAM={},SYS={},ACT={},HISTM=[],GEN=null;
 let VIEW='acc',SORT={k:'ts',d:-1},RMODE='thinking',FEEDF='all',DETF='all',DET=[],DETFILE='',charts={},_dataSig='',_streamSig='',_expSig='',accBenchUser=false,rBenchUser=false;
 function setText(id,t){const e=$(id);if(e&&e.textContent!==t)e.textContent=t;}
 let DBG={open:false,tab:'timeline'};
@@ -497,7 +511,10 @@ function experimentBand(){
   const dV=delta==null?'—':(delta>=0?'+':'')+delta+' pts';
   const dC=delta==null?'var(--mut)':delta>0?'var(--ok)':delta<0?'var(--dang)':'var(--mut)';
   const ourV=ourAcc!=null?(ourAcc+'%'+(liveActive?'<span class="livedot"></span>':'')):'—';
-  const prog=running?`<div class="expprog"><div class="expbar"><i style="width:${lv.n?Math.round((lv.i||0)/lv.n*100):0}%"></i></div><span class="mono muted" style="font-size:12px;white-space:nowrap">${lv.i||0}/${lv.n||0} · ${esc(nice(lv.benchmark))} · ${esc(lv.mode||'')} · acc ${lv.accuracy!=null?lv.accuracy:'?'}%</span></div>`:'';
+  // lv.i = COMPLETED questions (accuracy denominator); while running, question i+1 is the
+  // one in flight, so the progress counter shows i+1 ("on question 5", not "4 done")
+  const cur=running?Math.min((lv.i||0)+1,lv.n||0):(lv.i||0);
+  const prog=running?`<div class="expprog"><div class="expbar"><i style="width:${lv.n?Math.round(cur/lv.n*100):0}%"></i></div><span class="mono muted" style="font-size:12px;white-space:nowrap">${cur}/${lv.n||0} · ${esc(nice(lv.benchmark))} · ${esc(lv.mode||'')} · acc ${lv.accuracy!=null?lv.accuracy:'?'}%</span></div>`:'';
   el.innerHTML=`<div class="exphead"><div style="min-width:240px;flex:1">
       <div class="expk">CURRENT RUN</div>
       <div class="exptitle"><span class="tag pur">${esc(activeTag)}</span> ${status}</div>
@@ -757,10 +774,42 @@ function activityUI(){
     else{b.style.height='6%';b.className='';b.removeAttribute('title');}}
   setText('eqcapR',active?(ph==='thinking'?'reasoning':'answering')+' · peak '+mx.toFixed(1)+' t/s':(a.server_up?'idle between questions':'server offline'));
   const i=lv.i||0,n=lv.n||0,el=lv.elapsed_s;
-  $('progVal').textContent=i+'/'+n;
+  const cur=running?Math.min(i+1,n):i;   // question in flight while running; i = completed (ETA basis)
+  $('progVal').textContent=cur+'/'+n;
   if(running&&i>0&&n>i&&el)$('etaFoot').textContent='ETA '+fmtDur((el/i)*(n-i));
   else $('etaFoot').textContent=running?'ETA —':'idle';
 }
+
+/* ---------- live generation box: reasoning + answer streaming token-by-token (gen.json,
+   only written when an eval runs with BENCHY_LIVE_STREAM=1; server-agnostic, unlike the
+   ds4-log token chart). Auto-scrolls but yields if the user scrolls up to read. ---------- */
+function _stick(el,text){            // update a <pre>, keeping it pinned to the bottom unless
+  const near=el.scrollHeight-el.scrollTop-el.clientHeight<24;   // the user scrolled up to read
+  el.textContent=text;
+  if(near)el.scrollTop=el.scrollHeight;
+}
+function genUI(){
+  const box=$('genBox'),g=GEN;
+  // show the box only during a run that streams; hide for legacy/no-stream/idle-between-runs
+  if(!g||(!g.running&&!g.disabled&&!(g.answer||g.reasoning))){box.style.display='none';return;}
+  box.style.display='';
+  if(g.disabled){   // concurrency>1 — there is no single current generation to show
+    $('genNote').style.display='';$('genNote').textContent=g.reason||'live token stream is shown at concurrency=1';
+    $('genReasonWrap').style.display='none';$('genAnsLabel').style.display='none';$('genAns').style.display='none';
+    setText('genQ','');setText('genTok','');return;
+  }
+  $('genNote').style.display='none';$('genAnsLabel').style.display='';$('genAns').style.display='';
+  const live=!!g.running;
+  setText('genQ',g.i?('· Q'+g.i+(g.n?'/'+g.n:'')+(g.q?' · '+g.q.slice(0,80):'')):'');
+  setText('genTok',(g.gen_tokens!=null?g.gen_tokens+' tok':'')+(live?'':' · done'));
+  const rea=g.reasoning||'';
+  $('genReasonWrap').style.display=rea?'':'none';
+  if(rea)_stick($('genReason'),rea);
+  // a blinking cursor while running and still answering; reasoning-phase shows it on reasoning
+  const ans=(g.answer||'')||(live?'…':'');
+  _stick($('genAns'),ans);
+}
+function copyGen(){const g=GEN||{};const parts=[];if(g.reasoning)parts.push('# reasoning\n'+g.reasoning);parts.push('# answer\n'+(g.answer||''));copy(parts.join('\n\n'),'Generation copied');}
 
 /* ---------- controls ---------- */
 /* POST helper: surfaces non-2xx responses (e.g. the guard's text/plain 403) as a thrown
@@ -1050,10 +1099,10 @@ function errBar(msg){const e=$('errbar');if(!e)return;if(msg){e.textContent=msg;
    ring) and echo d.now back as the next since — no full-history refetch every 1.5s. */
 async function pulse(){try{
   const d=await fetch('/api/pulse?since='+_since).then(r=>r.json());
-  LIVE=d.live||{};STREAM=d.stream||{};ACT=d.activity||{};SYS=d.sys||{};
+  LIVE=d.live||{};STREAM=d.stream||{};ACT=d.activity||{};SYS=d.sys||{};GEN=d.gen||null;
   if(d.hist&&d.hist.length)HISTM=HISTM.concat(d.hist).slice(-900);
   if(d.now)_since=d.now;
-  streamUI();activityUI();systemUI();experimentBand();firstRunUI();syncBench();
+  streamUI();genUI();activityUI();systemUI();experimentBand();firstRunUI();syncBench();
   const up=!!(d.server&&d.server.up);$('srvPill').textContent=up?'online':'offline';$('srvPill').className='tag '+(up?'ok':'dang');
   $('srvBtn').style.display=up?'none':'inline-block';
   if($('chatwrap').classList.contains('open'))chatSetStatus(up);
