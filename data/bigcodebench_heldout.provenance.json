@@ -1,0 +1,12 @@
+{
+ "derived_from": "bigcodebench",
+ "source_sha256_12": "791e3ce0e9e6",
+ "rule": "random.Random(1234).shuffle over the 536 lines of bigcodebench.jsonl; the held-out set is the exact task_id complement of shuffle [0:140] (main runs = [0:40], ext slice = [40:140]), written back in SOURCE-FILE order. Set-identical to shuffle rows [140:], but the file is not in shuffle order and 8 rows are re-serialized (JSON-equal, byte-different), so taking shuffle [140:] verbatim reproduces the rows, NOT the file hash. The registered artifact is this file, by full sha256.",
+ "rows": 396,
+ "sha256_12": "df7449e2a3f3",
+ "cross_check": "content-level sha256 match of all 16 results/details/bigcodebench* files against source prompts: 140 distinct rows used, 0 unmatched, complement == this set",
+ "built": "2026-06-12T13:55:00",
+ "note": "HELD-OUT validation set. Never sent to any model, never in any imatrix capture. Do not run before the pre-registration in REPORT.md is stamped.",
+ "sha256": "df7449e2a3f391e710c2bb8db8101a3df1b20ae76f24daed0be8eb5a24b3fe86",
+ "source_sha256": "791e3ce0e9e6ceb7e79a1ded305a5dc85588c73a90392085aea20b76d3977f22"
+}
