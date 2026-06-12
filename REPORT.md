@@ -194,6 +194,44 @@ There is no fourth outcome and no re-analysis under alternative conventions.
 
 ---
 
+#### Amendment 1 — execution backend (pre-data, 2026-06-12 ~20:05)
+
+Stamped BEFORE any request against `bigcodebench_heldout` or `mbppplus_canary`: as of this
+commit, `results/runs.jsonl` contains no record for either benchmark name, and no server has
+been started since the pre-registration stamp.
+
+**Reason.** AWS GPU quota was only partially granted (8/32 vCPU on-demand, 8/32 spot, both
+cases still open at the time of this amendment). 2× g6e.xlarge = 89.4 GiB usable VRAM < v2
+weights alone (90.9 GiB). Rather than mix on-demand and spot pools (interruption = pair void)
+or wait indefinitely, the endpoint runs on the SAME backend as the entire campaign: the local
+Mac, Metal + SSD streaming.
+
+**What changes (only §4 "Generation backend"; endpoint §2, prediction §3, harness identity,
+sanity gates §5, secondary §6, interpretation §7 and analysis invocation are UNTOUCHED):**
+- Backend: local Mac (M-series, 64GB RAM), ds4 binary built 2026-06-12 13:50 from fork main
+  @43a0bf5 — which is the registered 324cc5a plus one README-only docs commit
+  (`git diff 324cc5a..43a0bf5 --stat` = README.md only, verified). SINGLE binary for both
+  legs: `~/Beep/ds4/ds4-server`, cwd `~/Beep/ds4` (build log `/tmp/ds4_build_main_20260612.log`).
+- Launch per leg: `./ds4-server -m <gguf> --port 8011 -c 16384 --ssd-streaming
+  --ssd-streaming-cache-experts 40GB` — the campaign's proven serving config. Collector OFF on
+  both legs (no `--imatrix-*` flags), as registered. NOTE: the campaign runs had the collector
+  ON uniformly; these legs have it OFF uniformly. Pairing is internal to the legs, so the
+  uniform-state requirement holds; absolute scores vs campaign BCB rows are not comparable
+  anyway (different rows) and are not an endpoint.
+- No tunnel: harness on the same host, `BENCHY_SERVER=http://127.0.0.1:8011`.
+- GGUF integrity re-verified at amendment time on the actual serving files:
+  baseline `efc7ed607ff2…` (computed 2026-06-12 14:0x), v2 `9245ddb0499e…` (computed
+  2026-06-12 20:0x) — both equal the registered hashes.
+- Execution driver: `~/Beep/forgequant/run_heldout_local.sh` — canary plain2bit → canary v2
+  (algorithmic gates: err > 30% or accuracy < 50% aborts) → leg 1 plain2bit (396) → leg 2 v2
+  (396), one serving cycle each, warmup string as registered, full logs under
+  `~/Beep/heldout_run_logs/`. Leg outputs are not inspected before the single analysis.
+- Hardware lock unchanged: whichever backend runs the canary runs both legs. The canary runs
+  on THIS backend; the AWS path is closed for this endpoint (any future cloud run of these
+  rows would be a separate, labeled, non-confirmatory exercise).
+
+---
+
 ## Previous verdict (v1-only, 2026-06-11 20:00 — superseded by the above)
 
 **Both coding-imatrix quants are ahead or at par on the pre-registered code legs —
