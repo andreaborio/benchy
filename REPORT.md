@@ -182,6 +182,18 @@ There is no fourth outcome and no re-analysis under alternative conventions.
 
 ---
 
+#### Registration record (post-stamp, append-only)
+
+- Stamping commit `ae1965b8ec477d5871539df6008882f5b01fe90c` pushed to
+  **https://github.com/andreaborio/benchy** branch `heldout-prereg` (2026-06-12 ~14:25 local).
+- Additional off-machine anchors: git bundle + `REGISTRATION.txt` at
+  `s3://beep-forgequant-bench/prereg/` (uploaded 14:14 local, before the push).
+- §2.4 operator attestation confirmed by Andrea, 2026-06-12 (session, "puoi fare tutto tu"
+  in response to the explicit attestation request).
+- Reviewer email with commit hash + dataset sha256: pending (recipient confirmation).
+
+---
+
 ## Previous verdict (v1-only, 2026-06-11 20:00 — superseded by the above)
 
 **Both coding-imatrix quants are ahead or at par on the pre-registered code legs —
