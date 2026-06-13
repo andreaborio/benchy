@@ -174,7 +174,7 @@ There is no fourth outcome and no re-analysis under alternative conventions.
 ### 8. Provenance and tamper-evidence
 
 - **Stamping commit (single commit, before any held-out request is served):** this REPORT.md section; the modified `analyze.py` (§7 diff); via `git add -f` (the `/data/` path is gitignored) `data/bigcodebench_heldout.jsonl` and `data/bigcodebench_heldout.provenance.json` with its `rule` field updated to the §2 wording. The benchy-dash `benchmarks.lock.json` entry (§4) is committed in benchy-dash at the same time.
-- **Off-machine anchor:** the stamping commit is **pushed to an off-machine remote (GitHub) before the canary**; the remote ref and commit hash are recorded in REPORT.md. A local-only commit is amendable and does not count as registration. Additionally, the commit hash + the full dataset sha256 are emailed to the reviewer; the received timestamp is an independent registration anchor.
+- **Off-machine anchor:** the stamping commit is **pushed to an off-machine remote (GitHub) before the canary**; the remote ref and commit hash are recorded in REPORT.md. A local-only commit is amendable and does not count as registration. (The GitHub push and the S3 bundle are the registration anchors; no reviewer-email anchor is used.)
 - Run records append-only to `results/runs.jsonl` with full `run_meta` (model, **BENCHY_MODEL = gguf basename** per leg, server, benchy_sha, **data_sha = df7449e2a3f3**, host, py); per-question details files retained under `results/details/` and referenced by the `details` field (tag is not in the filename — the runs.jsonl record is the link). Per leg, the server launch command and startup log (§4) and the cloud-host GGUF hash verification are retained and appended to REPORT.md with the leg record.
 - The analysis output — the §7 endpoint row (both-pass / both-fail / b / c / accuracies / exact p; both-fail derived per §7c) — is appended to REPORT.md directly below this section, with the §7 verdict line, in a separate commit after the run. Nothing else from the analyzer output is appended.
 
@@ -190,7 +190,7 @@ There is no fourth outcome and no re-analysis under alternative conventions.
   `s3://beep-forgequant-bench/prereg/` (uploaded 14:14 local, before the push).
 - §2.4 operator attestation confirmed by Andrea, 2026-06-12 (session, "puoi fare tutto tu"
   in response to the explicit attestation request).
-- Reviewer email with commit hash + dataset sha256: pending (recipient confirmation).
+- Reviewer-email anchor: dropped (not used). The off-machine GitHub push (above) plus the S3 bundle are the registration anchors; an email adds nothing.
 
 ---
 
