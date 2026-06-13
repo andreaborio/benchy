@@ -232,6 +232,42 @@ sanity gates §5, secondary §6, interpretation §7 and analysis invocation are 
 
 ---
 
+#### HELD-OUT RESULT (registered analysis, run once — 2026-06-13 02:06)
+
+**Endpoint row** (the only citable line of the analyzer output, per §7):
+
+| benchmark | model | both ok | both fail | base only (b) | model only (c) | delta | p (exact) | sig |
+|---|---|---|---|---|---|---|---|---|
+| bigcodebench_heldout | coder-q4boost-v2 | 176 | 188 | 16 | 16 | +0.0pt | 1.000 | no |
+
+Both legs 192/396 = **48.5%**. Discordant pairs 32/396 (8.1%); split exactly 16/16.
+Independently recomputed from the per-question files (pairing by question sha256, 396/396
+matched): identical numbers.
+
+**VERDICT (§7, pre-committed): p ≥ 0.05 → NOT CONFIRMED.** The capture-refine efficacy claim
+did not survive its held-out confirmatory test. The §3 prediction (c > b, win share ~0.65,
+expected p ≈ 0.033) did not transfer: observed win share 0.50, point estimate of zero effect.
+Per §7: the article either does not publish the efficacy claim, or reports it explicitly as
+unconfirmed with the §3 power note. No respinning as a trend; no post-hoc subgroup rescue.
+The pooled seen p=0.0357 is permanently demoted to exploratory; the distribution-overfitting
+objection (§1.1) stands as the simplest explanation of the seen-vs-held-out gap.
+
+**Leg records (gates: all PASS).**
+- Canary plain2bit: 24/30 = 80.0%, 0 errors (matches campaign reference 80.0).
+- Canary coder-q4boost-v2: 25/30 = 83.3%, 0 errors (matches campaign reference 83.3).
+- Leg 1 plain2bit: 396/396 rows, 0 error rows, 21:04–23:02 local (~17.7 s/task).
+- Leg 2 coder-q4boost-v2: 396/396 rows, 0 error rows, 23:02–02:05 (~27.5 s/task).
+- Single binary both legs (`~/Beep/ds4/ds4-server` @43a0bf5), collector OFF, launch line per
+  Amendment 1; GGUF hashes verified same-day (baseline 14:0x, v2 20:0x) == registered values.
+- Driver + full logs: `~/Beep/forgequant/run_heldout_local.sh`,
+  `~/Beep/heldout_run_logs/` (status.txt, 4 server logs, warmup.log, per-phase stdout);
+  full analyzer output retained at `~/Beep/heldout_run_logs/analysis_20260613T0206.md`
+  (everything but the endpoint row struck per §7).
+- No held-out output was inspected before this analysis (driver never parses leg output;
+  progress monitored by row count and transport errors only).
+
+---
+
 ## Previous verdict (v1-only, 2026-06-11 20:00 — superseded by the above)
 
 **Both coding-imatrix quants are ahead or at par on the pre-registered code legs —
